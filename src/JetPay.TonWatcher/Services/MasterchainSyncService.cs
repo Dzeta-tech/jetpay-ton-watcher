@@ -1,6 +1,7 @@
 using JetPay.TonWatcher.Data;
 using JetPay.TonWatcher.Data.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using TonSdk.Client;
 
 namespace JetPay.TonWatcher.Services;
@@ -8,7 +9,7 @@ namespace JetPay.TonWatcher.Services;
 public class MasterchainSyncService(
     ILogger<MasterchainSyncService> logger,
     ITonClientFactory tonClientFactory,
-    ApplicationDbContext dbContext) : BackgroundService
+    IServiceScopeFactory scopeFactory) : BackgroundService
 {
     readonly TimeSpan syncInterval = TimeSpan.FromSeconds(2);
 
@@ -16,6 +17,9 @@ public class MasterchainSyncService(
     {
         while (!stoppingToken.IsCancellationRequested)
         {
+            using IServiceScope scope = scopeFactory.CreateScope();
+            ApplicationDbContext dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
             ITonClient client = tonClientFactory.GetClient();
 
             // if no blocks in db, latest seqno is 0
@@ -39,7 +43,7 @@ public class MasterchainSyncService(
 
             // From latest saved seqno + 1 to current latest seqno, process each block
             for (long seqno = lastSeqnoInDb + 1; seqno <= currentLatestSeqno; seqno++)
-                await ProcessBlock(seqno);
+                await ProcessBlock(seqno, dbContext);
 
             await dbContext.SaveChangesAsync(stoppingToken);
 
@@ -48,7 +52,7 @@ public class MasterchainSyncService(
         }
     }
 
-    async Task ProcessBlock(long seqno)
+    async Task ProcessBlock(long seqno, ApplicationDbContext dbContext)
     {
         MasterchainBlock block = new()
         {

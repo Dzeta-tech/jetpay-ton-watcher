@@ -9,8 +9,7 @@ namespace JetPay.TonWatcher.Services;
 public class BlockProcessor(
     ILogger<BlockProcessor> logger,
     ITonClientFactory tonClientFactory,
-    ApplicationDbContext dbContext,
-    IBloomFilter addressBloomFilter) : BackgroundService
+    IServiceScopeFactory scopeFactory) : BackgroundService
 {
     readonly TimeSpan syncInterval = TimeSpan.FromSeconds(1); // Often check for new blocks
 
@@ -18,11 +17,15 @@ public class BlockProcessor(
     {
         while (!stoppingToken.IsCancellationRequested)
         {
+            using IServiceScope scope = scopeFactory.CreateScope();
+            ApplicationDbContext dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            IBloomFilter addressBloomFilter = scope.ServiceProvider.GetRequiredService<IBloomFilter>();
+
             // Check for any unprocessed blocks in db, check from oldest to newest
             MasterchainBlock[] unprocessedBlocks = await dbContext.MasterchainBlocks.Where(x => !x.IsProcessed)
                 .OrderBy(x => x.Seqno).ToArrayAsync(stoppingToken);
             foreach (MasterchainBlock block in unprocessedBlocks)
-                await ProcessBlock(block, stoppingToken);
+                await ProcessBlock(block, dbContext, addressBloomFilter, stoppingToken);
 
             if (unprocessedBlocks.Length > 0)
                 await dbContext.SaveChangesAsync(stoppingToken);
@@ -31,7 +34,7 @@ public class BlockProcessor(
         }
     }
 
-    async Task ProcessBlock(MasterchainBlock block, CancellationToken stoppingToken)
+    async Task ProcessBlock(MasterchainBlock block, ApplicationDbContext dbContext, IBloomFilter addressBloomFilter, CancellationToken stoppingToken)
     {
         logger.LogInformation("Processing block {Seqno}", block.Seqno);
         ITonClient client = tonClientFactory.GetClient();
@@ -39,12 +42,12 @@ public class BlockProcessor(
         if (!shards.HasValue)
             return;
         foreach (BlockIdExtended shard in shards.Value.Shards)
-            await ProcessShard(shard, stoppingToken);
+            await ProcessShard(shard, dbContext, addressBloomFilter, stoppingToken);
         block.MarkAsProcessed();
         logger.LogInformation("Block {Seqno} processed", block.Seqno);
     }
 
-    async Task ProcessShard(BlockIdExtended shard, CancellationToken stoppingToken)
+    async Task ProcessShard(BlockIdExtended shard, ApplicationDbContext dbContext, IBloomFilter addressBloomFilter, CancellationToken stoppingToken)
     {
         logger.LogInformation("Processing shard {Shard}", shard.Shard);
 
