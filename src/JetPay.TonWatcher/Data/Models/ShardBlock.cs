@@ -4,12 +4,22 @@ using Microsoft.EntityFrameworkCore;
 
 namespace JetPay.TonWatcher.Data.Models;
 
-[Index(nameof(IsProcessed))]
-public class MasterchainBlock
+[Index(nameof(Seqno))]
+public class ShardBlock
 {
     [Key]
     [DatabaseGenerated(DatabaseGeneratedOption.None)]
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    public int Workchain { get; set; }
+
+    public long Shard { get; set; }
+
     public long Seqno { get; set; }
+
+    public string RootHash { get; set; } = null!;
+
+    public string FileHash { get; set; } = null!;
 
     public bool IsProcessed { get; set; }
 

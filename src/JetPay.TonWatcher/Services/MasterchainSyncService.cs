@@ -1,7 +1,6 @@
 using JetPay.TonWatcher.Data;
 using JetPay.TonWatcher.Data.Models;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using TonSdk.Client;
 
 namespace JetPay.TonWatcher.Services;
@@ -20,30 +19,16 @@ public class MasterchainSyncService(
             using IServiceScope scope = scopeFactory.CreateScope();
             ApplicationDbContext dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-            ITonClient client = tonClientFactory.GetClient();
-
-            // if no blocks in db, latest seqno is 0
-            long lastSeqnoInDb = await dbContext.MasterchainBlocks.OrderByDescending(x => x.Seqno).Select(x => x.Seqno)
-                .FirstOrDefaultAsync(stoppingToken);
-
-            logger.LogInformation("Latest seqno in db: {LastSeqno}", lastSeqnoInDb);
-
+            TonClient client = tonClientFactory.GetClient();
             MasterchainInformationResult? masterchainInfo = await client.GetMasterchainInfo();
-            if (!masterchainInfo.HasValue)
+
+            // Get actual shards
+            ShardsInformationResult? shards = await client.Shards(masterchainInfo.Value.LastBlock.Seqno);
+            if (!shards.HasValue)
                 goto Delay;
 
-            long currentLatestSeqno = masterchainInfo.Value.LastBlock.Seqno;
-
-            // If no blocks in db, set last seqno to current latest seqno - 1 to process the latest block
-            if (lastSeqnoInDb == 0)
-                lastSeqnoInDb = currentLatestSeqno - 1;
-
-            logger.LogInformation("Processing blocks from {LastSeqno} to {CurrentLatestSeqno}", lastSeqnoInDb,
-                currentLatestSeqno);
-
-            // From latest saved seqno + 1 to current latest seqno, process each block
-            for (long seqno = lastSeqnoInDb + 1; seqno <= currentLatestSeqno; seqno++)
-                await ProcessBlock(seqno, dbContext);
+            foreach (BlockIdExtended shard in shards.Value.Shards)
+                await ProcessShard(shard, dbContext);
 
             await dbContext.SaveChangesAsync(stoppingToken);
 
@@ -52,13 +37,29 @@ public class MasterchainSyncService(
         }
     }
 
-    async Task ProcessBlock(long seqno, ApplicationDbContext dbContext)
+    async Task ProcessShard(BlockIdExtended shard, ApplicationDbContext dbContext)
     {
-        MasterchainBlock block = new()
-        {
-            Seqno = seqno
-        };
+        // Search for max seqno of this shard in database
+        long maxSeqno = await dbContext.ShardBlocks.AsNoTracking().Where(x => x.Shard == shard.Shard)
+            .OrderByDescending(x => x.Seqno).Select(x => x.Seqno).FirstOrDefaultAsync();
+        if (maxSeqno == 0)
+            maxSeqno = shard.Seqno - 1;
 
-        await dbContext.MasterchainBlocks.AddAsync(block);
+        // Process shards from max seqno + 1 to current seqno
+        for (long seqno = maxSeqno + 1; seqno <= shard.Seqno; seqno++)
+            await ProcessShardBlock(shard, seqno, dbContext);
+    }
+
+    async Task ProcessShardBlock(BlockIdExtended shard, long seqno, ApplicationDbContext dbContext)
+    {
+        // Just add shard block to database
+        ShardBlock shardBlock = new()
+        {
+            Shard = shard.Shard,
+            Seqno = seqno,
+            RootHash = shard.RootHash,
+            FileHash = shard.FileHash
+        };
+        await dbContext.ShardBlocks.AddAsync(shardBlock);
     }
 }

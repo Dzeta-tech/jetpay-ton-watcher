@@ -2,8 +2,8 @@ using BloomFilter;
 using JetPay.TonWatcher.Data;
 using JetPay.TonWatcher.Data.Models;
 using Microsoft.EntityFrameworkCore;
-using TonSdk.Client;
 using Telegram.Bot;
+using TonSdk.Client;
 
 namespace JetPay.TonWatcher.Services;
 
@@ -24,10 +24,11 @@ public class BlockProcessor(
             TelegramBotClient botClient = scope.ServiceProvider.GetRequiredService<TelegramBotClient>();
 
             // Check for any unprocessed blocks in db, check from oldest to newest
-            MasterchainBlock[] unprocessedBlocks = await dbContext.MasterchainBlocks.Where(x => !x.IsProcessed)
-                .OrderBy(x => x.Seqno).ToArrayAsync(stoppingToken);
-            foreach (MasterchainBlock block in unprocessedBlocks)
-                await ProcessBlock(block, dbContext, addressBloomFilter, botClient, stoppingToken);
+            ShardBlock[] unprocessedBlocks = await dbContext.ShardBlocks.Where(x => !x.IsProcessed)
+                .OrderBy(x => x.Shard).ThenBy(x => x.Seqno)
+                .ToArrayAsync(stoppingToken);
+            foreach (ShardBlock block in unprocessedBlocks)
+                await ProcessShard(block, dbContext, addressBloomFilter, botClient, stoppingToken);
 
             if (unprocessedBlocks.Length > 0)
                 await dbContext.SaveChangesAsync(stoppingToken);
@@ -36,22 +37,10 @@ public class BlockProcessor(
         }
     }
 
-    async Task ProcessBlock(MasterchainBlock block, ApplicationDbContext dbContext, IBloomFilter addressBloomFilter, TelegramBotClient botClient, CancellationToken stoppingToken)
+    async Task ProcessShard(ShardBlock shard, ApplicationDbContext dbContext, IBloomFilter addressBloomFilter,
+        TelegramBotClient botClient, CancellationToken stoppingToken)
     {
-        logger.LogInformation("Processing block {Seqno}", block.Seqno);
-        ITonClient client = tonClientFactory.GetClient();
-        ShardsInformationResult? shards = await client.Shards(block.Seqno);
-        if (!shards.HasValue)
-            return;
-        foreach (BlockIdExtended shard in shards.Value.Shards)
-            await ProcessShard(shard, dbContext, addressBloomFilter, botClient, stoppingToken);
-        block.MarkAsProcessed();
-        logger.LogInformation("Block {Seqno} processed", block.Seqno);
-    }
-
-    async Task ProcessShard(BlockIdExtended shard, ApplicationDbContext dbContext, IBloomFilter addressBloomFilter, TelegramBotClient botClient, CancellationToken stoppingToken)
-    {
-        logger.LogInformation("Processing shard {Shard}", shard.Shard);
+        logger.LogInformation("Processing shard {Shard} {Seqno}", shard.Shard, shard.Seqno);
 
         // Get shard transactions
         TonClient client = tonClientFactory.GetClient();
@@ -76,12 +65,17 @@ public class BlockProcessor(
             // Process transaction
             await ProcessTransaction(transaction, botClient, stoppingToken);
         }
+
+        shard.MarkAsProcessed();
+        logger.LogInformation("Shard {Shard} {Seqno} processed", shard.Shard, shard.Seqno);
     }
 
-    async Task ProcessTransaction(ShortTransactionsResult transaction, TelegramBotClient botClient, CancellationToken stoppingToken)
+    async Task ProcessTransaction(ShortTransactionsResult transaction, TelegramBotClient botClient,
+        CancellationToken stoppingToken)
     {
         // TODO: Implement transaction processing
         logger.LogWarning("Found transaction {Account}. TxHash {Hash}", transaction.Account, transaction.Hash);
-        await botClient.SendMessage(731818836, $"Found transaction {transaction.Hash}", cancellationToken: stoppingToken);
+        await botClient.SendMessage(731818836, $"Found transaction {transaction.Hash}",
+            cancellationToken: stoppingToken);
     }
 }

@@ -5,7 +5,10 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace JetPay.TonWatcher.Controllers;
 
-public class ApiController(ILogger<ApiController> logger, ApplicationDbContext dbContext, IBloomFilter addressBloomFilter) : ControllerBase
+public class ApiController(
+    ILogger<ApiController> logger,
+    ApplicationDbContext dbContext,
+    IBloomFilter addressBloomFilter) : ControllerBase
 {
     [HttpGet("api/v1/status")]
     public IActionResult GetStatus()

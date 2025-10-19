@@ -57,6 +57,7 @@ public static class DependencyInjection
         builder.Services.AddBloomFilter(setupAction => { setupAction.UseInMemory(); });
         builder.Services.AddHostedService<MasterchainSyncService>();
         builder.Services.AddHostedService<BlockProcessor>();
-        builder.Services.AddSingleton<TelegramBotClient>(serviceProvider => new TelegramBotClient(serviceProvider.GetRequiredService<AppConfiguration>().BotToken));
+        builder.Services.AddSingleton<TelegramBotClient>(serviceProvider =>
+            new TelegramBotClient(serviceProvider.GetRequiredService<AppConfiguration>().BotToken));
     }
 }
