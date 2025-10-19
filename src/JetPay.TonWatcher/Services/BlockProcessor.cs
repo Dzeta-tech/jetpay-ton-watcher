@@ -45,7 +45,7 @@ public class BlockProcessor(
             logger.LogInformation("Processing shard {Shard} {Seqno}", shard.Shard, shard.Seqno);
 
             // Get shard transactions
-            TonClient client = tonClientFactory.GetClient();
+            RateLimitedTonClient client = tonClientFactory.GetClient();
             BlockTransactionsResult? transactions =
                 await client.GetBlockTransactions(shard.Workchain, shard.Shard, shard.Seqno, shard.RootHash, shard.FileHash,
                     count: 10000); // TODO: Idk how many transactions to get

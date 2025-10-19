@@ -19,7 +19,7 @@ public class MasterchainSyncService(
             using IServiceScope scope = scopeFactory.CreateScope();
             ApplicationDbContext dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-            TonClient client = tonClientFactory.GetClient();
+            RateLimitedTonClient client = tonClientFactory.GetClient();
             MasterchainInformationResult? masterchainInfo = await client.GetMasterchainInfo();
 
             // Get actual shards
@@ -58,7 +58,7 @@ public class MasterchainSyncService(
     async Task ProcessOldShardBlocks(BlockIdExtended shard, long seqno, ApplicationDbContext dbContext) 
     {
         // Get shard transactions
-        TonClient client = tonClientFactory.GetClient();
+        RateLimitedTonClient client = tonClientFactory.GetClient();
         var block = await client.LookUpBlock(shard.Workchain, shard.Shard, seqno);
         
         if (block is null)

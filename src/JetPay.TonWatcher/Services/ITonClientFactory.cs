@@ -5,5 +5,5 @@ namespace JetPay.TonWatcher.Services;
 public interface ITonClientFactory
 {
     public Task Initialize();
-    public TonClient GetClient();
+    public RateLimitedTonClient GetClient();
 }

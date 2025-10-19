@@ -30,9 +30,9 @@ public class OrbsTonClientFactory(ILogger<OrbsTonClientFactory> logger) : ITonCl
         }
     }
 
-    public TonClient GetClient()
+    public RateLimitedTonClient GetClient()
     {
-        return clients[Random.Shared.Next(clients.Count)];
+        return new RateLimitedTonClient(clients[Random.Shared.Next(clients.Count)]);
     }
 }
 
