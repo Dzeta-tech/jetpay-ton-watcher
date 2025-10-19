@@ -54,5 +54,7 @@ public static class DependencyInjection
     {
         builder.Services.AddSingleton<ITonClientFactory, OrbsTonClientFactory>();
         builder.Services.AddBloomFilter(setupAction => { setupAction.UseInMemory(); });
+        builder.Services.AddHostedService<MasterchainSyncService>();
+        builder.Services.AddHostedService<BlockProcessor>();
     }
 }
