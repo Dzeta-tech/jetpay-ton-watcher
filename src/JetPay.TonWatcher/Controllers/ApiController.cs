@@ -1,10 +1,11 @@
+using BloomFilter;
 using JetPay.TonWatcher.Data;
 using JetPay.TonWatcher.Data.Models;
 using Microsoft.AspNetCore.Mvc;
 
 namespace JetPay.TonWatcher.Controllers;
 
-public class ApiController(ILogger<ApiController> logger, ApplicationDbContext dbContext) : ControllerBase
+public class ApiController(ILogger<ApiController> logger, ApplicationDbContext dbContext, IBloomFilter addressBloomFilter) : ControllerBase
 {
     [HttpGet("api/v1/status")]
     public IActionResult GetStatus()
@@ -29,6 +30,8 @@ public class ApiController(ILogger<ApiController> logger, ApplicationDbContext d
         await dbContext.TrackedAddresses.AddAsync(trackedAddress);
         await dbContext.SaveChangesAsync();
 
-        return Ok();
+        await addressBloomFilter.AddAsync(address);
+
+        return Ok("Address added to tracking");
     }
 }
