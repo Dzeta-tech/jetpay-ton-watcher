@@ -40,34 +40,42 @@ public class BlockProcessor(
     async Task ProcessShard(ShardBlock shard, ApplicationDbContext dbContext, IBloomFilter addressBloomFilter,
         TelegramBotClient botClient, CancellationToken stoppingToken)
     {
-        logger.LogInformation("Processing shard {Shard} {Seqno}", shard.Shard, shard.Seqno);
-
-        // Get shard transactions
-        TonClient client = tonClientFactory.GetClient();
-        BlockTransactionsResult? transactions =
-            await client.GetBlockTransactions(shard.Workchain, shard.Shard, shard.Seqno, shard.RootHash, shard.FileHash,
-                count: 10000); // TODO: Idk how many transactions to get
-
-        if (!transactions.HasValue)
-            return;
-
-        foreach (ShortTransactionsResult transaction in transactions.Value.Transactions)
+        try
         {
-            if (!await addressBloomFilter.ContainsAsync(transaction.Account))
-                continue;
+            logger.LogInformation("Processing shard {Shard} {Seqno}", shard.Shard, shard.Seqno);
 
-            // Bloom filter might give false positives, so we need to check if the address is actually in the database and active
-            TrackedAddress? trackedAddress = await dbContext.TrackedAddresses.AsNoTracking()
-                .FirstOrDefaultAsync(x => x.Address == transaction.Account, stoppingToken);
-            if (trackedAddress is null || !trackedAddress.IsTrackingActive)
-                continue;
+            // Get shard transactions
+            TonClient client = tonClientFactory.GetClient();
+            BlockTransactionsResult? transactions =
+                await client.GetBlockTransactions(shard.Workchain, shard.Shard, shard.Seqno, shard.RootHash, shard.FileHash,
+                    count: 10000); // TODO: Idk how many transactions to get
 
-            // Process transaction
-            await ProcessTransaction(transaction, botClient, stoppingToken);
+            if (!transactions.HasValue)
+                return;
+
+            foreach (ShortTransactionsResult transaction in transactions.Value.Transactions)
+            {
+                if (!await addressBloomFilter.ContainsAsync(transaction.Account))
+                    continue;
+
+                // Bloom filter might give false positives, so we need to check if the address is actually in the database and active
+                TrackedAddress? trackedAddress = await dbContext.TrackedAddresses.AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.Address == transaction.Account, stoppingToken);
+                if (trackedAddress is null || !trackedAddress.IsTrackingActive)
+                    continue;
+
+                // Process transaction
+                await ProcessTransaction(transaction, botClient, stoppingToken);
+            }
+
+            shard.MarkAsProcessed();
+            logger.LogInformation("Shard {Shard} {Seqno} processed", shard.Shard, shard.Seqno);
         }
-
-        shard.MarkAsProcessed();
-        logger.LogInformation("Shard {Shard} {Seqno} processed", shard.Shard, shard.Seqno);
+        catch (Exception ex) when (ex.Message.Contains("LITE_SERVER_NOTREADY"))
+        {
+            logger.LogWarning(ex, "Lite server not ready, skipping shard {Shard} {Seqno}", shard.Shard, shard.Seqno);
+            return;
+        }
     }
 
     async Task ProcessTransaction(ShortTransactionsResult transaction, TelegramBotClient botClient,
