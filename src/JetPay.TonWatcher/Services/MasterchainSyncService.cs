@@ -73,6 +73,7 @@ public class MasterchainSyncService(
             FileHash = block.FileHash
         };
         await dbContext.ShardBlocks.AddAsync(shardBlock);
+        await dbContext.SaveChangesAsync(); // TODO: This is not the best way to do this, but it's the only way to get the id of the shard block
     }
 
     async Task ProcessShardBlock(BlockIdExtended shard, ApplicationDbContext dbContext)
