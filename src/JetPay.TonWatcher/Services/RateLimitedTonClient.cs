@@ -5,10 +5,12 @@ using Microsoft.AspNetCore.RateLimiting;
 public class RateLimitedTonClient 
 {
     // Allow 9 requests per second
-    readonly FixedWindowRateLimiter limiter = new FixedWindowRateLimiter(new FixedWindowRateLimiterOptions()
+    readonly TokenBucketRateLimiter limiter = new TokenBucketRateLimiter(new TokenBucketRateLimiterOptions()
     {
-        PermitLimit = 9,
-        Window = TimeSpan.FromSeconds(1)
+        AutoReplenishment = true,
+        ReplenishmentPeriod = TimeSpan.FromSeconds(1),
+        TokenLimit = 10,
+        TokensPerPeriod = 9
     });
     
     readonly TonClient client;
