@@ -21,24 +21,28 @@ public class RateLimitedTonClient
     public async Task<MasterchainInformationResult?> GetMasterchainInfo()
     {
         await limiter.AcquireAsync(1);
+        Console.WriteLine("Getting masterchain info");
         return await client.GetMasterchainInfo();
     }
 
     public async Task<ShardsInformationResult?> Shards(long seqno)
     {
         await limiter.AcquireAsync(1);
+        Console.WriteLine("Getting shards");
         return await client.Shards(seqno);
     }
 
     public async Task<BlockIdExtended?> LookUpBlock(int workchain, long shard, long seqno)
     {
         await limiter.AcquireAsync(1);
+        Console.WriteLine("Looking up block");
         return await client.LookUpBlock(workchain, shard, seqno);
     }
 
     public async Task<BlockTransactionsResult?> GetBlockTransactions(int workchain, long shard, long seqno, string rootHash, string fileHash, ulong? count)
     {
         await limiter.AcquireAsync(1);
+        Console.WriteLine("Getting block transactions");
         return await client.GetBlockTransactions(workchain, shard, seqno, rootHash, fileHash, count);
     }
 }
