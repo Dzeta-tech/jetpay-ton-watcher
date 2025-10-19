@@ -42,21 +42,46 @@ public class MasterchainSyncService(
         // Search for max seqno of this shard in database
         long maxSeqno = await dbContext.ShardBlocks.AsNoTracking().Where(x => x.Shard == shard.Shard)
             .OrderByDescending(x => x.Seqno).Select(x => x.Seqno).FirstOrDefaultAsync();
+        
         if (maxSeqno == 0)
             maxSeqno = shard.Seqno - 1;
 
-        // Process shards from max seqno + 1 to current seqno
-        for (long seqno = maxSeqno + 1; seqno <= shard.Seqno; seqno++)
-            await ProcessShardBlock(shard, seqno, dbContext);
+        // Process missed shard blocks
+        for (long seqno = maxSeqno + 1; seqno < shard.Seqno; seqno++)
+            await ProcessOldShardBlocks(shard, seqno, dbContext);
+
+        // Process current shard block if needed
+        if (maxSeqno < shard.Seqno)
+            await ProcessShardBlock(shard, dbContext);
     }
 
-    async Task ProcessShardBlock(BlockIdExtended shard, long seqno, ApplicationDbContext dbContext)
+    async Task ProcessOldShardBlocks(BlockIdExtended shard, long seqno, ApplicationDbContext dbContext) 
+    {
+        // Get shard transactions
+        TonClient client = tonClientFactory.GetClient();
+        var block = await client.LookUpBlock(shard.Workchain, shard.Shard, seqno);
+        
+        if (block is null)
+            return;
+
+        ShardBlock shardBlock = new()
+        {
+            Workchain = shard.Workchain,
+            Shard = shard.Shard,
+            Seqno = seqno,
+            RootHash = block.RootHash,
+            FileHash = block.FileHash
+        };
+        await dbContext.ShardBlocks.AddAsync(shardBlock);
+    }
+
+    async Task ProcessShardBlock(BlockIdExtended shard, ApplicationDbContext dbContext)
     {
         // Just add shard block to database
         ShardBlock shardBlock = new()
         {
             Shard = shard.Shard,
-            Seqno = seqno,
+            Seqno = shard.Seqno,
             RootHash = shard.RootHash,
             FileHash = shard.FileHash
         };
