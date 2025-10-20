@@ -3,13 +3,14 @@ using JetPay.TonWatcher.Data;
 using JetPay.TonWatcher.Data.Models;
 using Microsoft.EntityFrameworkCore;
 using Telegram.Bot;
-using TonSdk.Client;
+using TonSdk.Adnl.LiteClient;
+using TonSdk.Core;
 
 namespace JetPay.TonWatcher.Services;
 
 public class BlockProcessor(
     ILogger<BlockProcessor> logger,
-    ITonClientFactory tonClientFactory,
+    LiteClientProvider liteClientProvider,
     IServiceScopeFactory scopeFactory) : BackgroundService
 {
     readonly TimeSpan syncInterval = TimeSpan.FromSeconds(1); // Often check for new blocks
@@ -45,27 +46,39 @@ public class BlockProcessor(
             logger.LogInformation("Processing shard {Shard} {Seqno}", shard.Shard, shard.Seqno);
 
             // Get shard transactions
-            RateLimitedTonClient client = tonClientFactory.GetClient();
-            BlockTransactionsResult? transactions =
-                await client.GetBlockTransactions(shard.Workchain, shard.Shard, shard.Seqno, shard.RootHash, shard.FileHash,
-                    count: 10000); // TODO: Idk how many transactions to get
+            BlockIdExtended blockId = new(
+                shard.Workchain,
+                Convert.FromBase64String(shard.RootHash),
+                Convert.FromBase64String(shard.FileHash),
+                shard.Shard,
+                (int)shard.Seqno
+            );
 
-            if (!transactions.HasValue)
+            ListBlockTransactionsResult transactionsResult = await liteClientProvider.GetBlockTransactionsAsync(blockId);
+
+            if (transactionsResult.InComplete)
+            {
+                logger.LogWarning("Block {Shard} {Seqno} transactions incomplete, skipping", shard.Shard, shard.Seqno);
+                return;
+            }
+
+            if (transactionsResult.TransactionIds == null || transactionsResult.TransactionIds.Length == 0)
                 return;
 
-            foreach (ShortTransactionsResult transaction in transactions.Value.Transactions)
+            foreach (var tx in transactionsResult.TransactionIds)
             {
-                if (!await addressBloomFilter.ContainsAsync(transaction.Account))
+                string accountAddress = new Address(shard.Workchain, tx.Account).ToString();
+                if (!await addressBloomFilter.ContainsAsync(accountAddress))
                     continue;
 
                 // Bloom filter might give false positives, so we need to check if the address is actually in the database and active
                 TrackedAddress? trackedAddress = await dbContext.TrackedAddresses.AsNoTracking()
-                    .FirstOrDefaultAsync(x => x.Address == transaction.Account, stoppingToken);
+                    .FirstOrDefaultAsync(x => x.Address == accountAddress, stoppingToken);
                 if (trackedAddress is null || !trackedAddress.IsTrackingActive)
                     continue;
 
                 // Process transaction
-                await ProcessTransaction(transaction, botClient, stoppingToken);
+                await ProcessTransaction(accountAddress, Convert.ToBase64String(tx.Hash), (ulong)tx.Lt, botClient, stoppingToken);
             }
 
             shard.MarkAsProcessed();
@@ -78,12 +91,12 @@ public class BlockProcessor(
         }
     }
 
-    async Task ProcessTransaction(ShortTransactionsResult transaction, TelegramBotClient botClient,
+    async Task ProcessTransaction(string account, string txHash, ulong lt, TelegramBotClient botClient,
         CancellationToken stoppingToken)
     {
         // TODO: Implement transaction processing
-        logger.LogWarning("Found transaction {Account}. TxHash {Hash}", transaction.Account, transaction.Hash);
-        await botClient.SendMessage(731818836, $"Found transaction {transaction.Hash}",
+        logger.LogWarning("Found transaction {Account}. TxHash {Hash} Lt {Lt}", account, txHash, lt);
+        await botClient.SendMessage(731818836, $"Found transaction {txHash} (Lt: {lt})",
             cancellationToken: stoppingToken);
     }
 }

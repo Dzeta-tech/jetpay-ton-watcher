@@ -53,7 +53,7 @@ public static class DependencyInjection
 
     public static void UseServices(this WebApplicationBuilder builder)
     {
-        builder.Services.AddSingleton<ITonClientFactory, LiteServerTonClientFactory>();
+        builder.Services.AddSingleton<LiteClientProvider>();
         builder.Services.AddBloomFilter(setupAction => { setupAction.UseInMemory(); });
         builder.Services.AddHostedService<MasterchainSyncService>();
         builder.Services.AddHostedService<BlockProcessor>();

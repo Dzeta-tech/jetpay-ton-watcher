@@ -1,13 +1,13 @@
 using JetPay.TonWatcher.Data;
 using JetPay.TonWatcher.Data.Models;
 using Microsoft.EntityFrameworkCore;
-using TonSdk.Client;
+using TonSdk.Adnl.LiteClient;
 
 namespace JetPay.TonWatcher.Services;
 
 public class MasterchainSyncService(
     ILogger<MasterchainSyncService> logger,
-    ITonClientFactory tonClientFactory,
+    LiteClientProvider liteClientProvider,
     IServiceScopeFactory scopeFactory) : BackgroundService
 {
     readonly TimeSpan syncInterval = TimeSpan.FromSeconds(2);
@@ -19,15 +19,14 @@ public class MasterchainSyncService(
             using IServiceScope scope = scopeFactory.CreateScope();
             ApplicationDbContext dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-            RateLimitedTonClient client = tonClientFactory.GetClient();
-            MasterchainInformationResult? masterchainInfo = await client.GetMasterchainInfo();
-
+            MasterChainInfoExtended masterchainInfo = await liteClientProvider.GetMasterChainInfoAsync();
+            
             // Get actual shards
-            ShardsInformationResult? shards = await client.Shards(masterchainInfo.Value.LastBlock.Seqno);
-            if (!shards.HasValue)
+            BlockIdExtended[] shards = await liteClientProvider.GetShardsAsync(masterchainInfo.LastBlockId);
+            if (shards == null || shards.Length == 0)
                 goto Delay;
 
-            foreach (BlockIdExtended shard in shards.Value.Shards)
+            foreach (BlockIdExtended shard in shards)
                 await ProcessShard(shard, dbContext);
 
             await dbContext.SaveChangesAsync(stoppingToken);
@@ -57,20 +56,18 @@ public class MasterchainSyncService(
 
     async Task ProcessOldShardBlocks(BlockIdExtended shard, long seqno, ApplicationDbContext dbContext) 
     {
-        // Get shard transactions
-        RateLimitedTonClient client = tonClientFactory.GetClient();
-        var block = await client.LookUpBlock(shard.Workchain, shard.Shard, seqno);
+        BlockIdExtended? block = await liteClientProvider.LookupBlockAsync(shard.Workchain, shard.Shard, seqno);
         
         if (block is null)
             return;
 
         ShardBlock shardBlock = new()
         {
-            Workchain = shard.Workchain,
-            Shard = shard.Shard,
-            Seqno = seqno,
-            RootHash = block.RootHash,
-            FileHash = block.FileHash
+            Workchain = block.Workchain,
+            Shard = block.Shard,
+            Seqno = block.Seqno,
+            RootHash = Convert.ToBase64String(block.RootHash),
+            FileHash = Convert.ToBase64String(block.FileHash)
         };
         await dbContext.ShardBlocks.AddAsync(shardBlock);
         await dbContext.SaveChangesAsync(); // TODO: This is not the best way to do this, but it's the only way to get the id of the shard block
@@ -81,10 +78,11 @@ public class MasterchainSyncService(
         // Just add shard block to database
         ShardBlock shardBlock = new()
         {
+            Workchain = shard.Workchain,
             Shard = shard.Shard,
             Seqno = shard.Seqno,
-            RootHash = shard.RootHash,
-            FileHash = shard.FileHash
+            RootHash = Convert.ToBase64String(shard.RootHash),
+            FileHash = Convert.ToBase64String(shard.FileHash)
         };
         await dbContext.ShardBlocks.AddAsync(shardBlock);
     }

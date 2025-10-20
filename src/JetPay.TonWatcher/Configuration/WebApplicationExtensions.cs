@@ -47,8 +47,8 @@ public static class WebApplicationExtensions
     {
         using IServiceScope scope = app.Services.CreateScope();
 
-        ITonClientFactory tonClientFactory = scope.ServiceProvider.GetRequiredService<ITonClientFactory>();
-        await tonClientFactory.Initialize();
+        LiteClientProvider liteClientProvider = scope.ServiceProvider.GetRequiredService<LiteClientProvider>();
+        await liteClientProvider.InitializeAsync();
 
         ApplicationDbContext dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         IBloomFilter bloomFilter = scope.ServiceProvider.GetRequiredService<IBloomFilter>();
