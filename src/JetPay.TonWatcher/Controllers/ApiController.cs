@@ -2,6 +2,7 @@ using BloomFilter;
 using JetPay.TonWatcher.Data;
 using JetPay.TonWatcher.Data.Models;
 using Microsoft.AspNetCore.Mvc;
+using TonSdk.Core;
 
 namespace JetPay.TonWatcher.Controllers;
 
@@ -22,18 +23,26 @@ public class ApiController(
         if (string.IsNullOrEmpty(address))
             return BadRequest("Address is required");
 
-        if (address.Length != 66)
-            return BadRequest("Address must be 66 characters long");
+        Address parsedAddress;
+        try
+        {
+            parsedAddress = new Address(address);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest($"Invalid address format: {ex.Message}");
+        }
 
-        if (!address.StartsWith("0:"))
-            return BadRequest("Address must start with 0:");
-
-        TrackedAddress trackedAddress = new() { Address = address };
+        TrackedAddress trackedAddress = new() 
+        { 
+            Workchain = parsedAddress.GetWorkchain(),
+            Account = parsedAddress.GetHash()
+        };
 
         await dbContext.TrackedAddresses.AddAsync(trackedAddress);
         await dbContext.SaveChangesAsync();
 
-        await addressBloomFilter.AddAsync(address);
+        await addressBloomFilter.AddAsync(parsedAddress.GetHash());
 
         return Ok("Address added to tracking");
     }

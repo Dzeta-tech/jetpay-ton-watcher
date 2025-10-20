@@ -52,9 +52,9 @@ public static class WebApplicationExtensions
 
         ApplicationDbContext dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         IBloomFilter bloomFilter = scope.ServiceProvider.GetRequiredService<IBloomFilter>();
-        string[] trackedAddresses = await dbContext.TrackedAddresses.Where(x => x.IsTrackingActive)
-            .Select(x => x.Address).ToArrayAsync();
-        foreach (string trackedAddress in trackedAddresses)
-            await bloomFilter.AddAsync(trackedAddress);
+        byte[][] trackedAccounts = await dbContext.TrackedAddresses.Where(x => x.IsTrackingActive)
+            .Select(x => x.Account).ToArrayAsync();
+        foreach (byte[] account in trackedAccounts)
+            await bloomFilter.AddAsync(account);
     }
 }

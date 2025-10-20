@@ -9,9 +9,12 @@ public class TrackedAddress
     [DatabaseGenerated(DatabaseGeneratedOption.None)]
     public Guid Id { get; set; } = Guid.NewGuid();
 
-    // Address is TON address, 64 characters long + "0:" prefix
-    // 66 characters long
-    [StringLength(66)] public string Address { get; set; } = null!;
+    // Workchain ID (usually 0 for basechain, -1 for masterchain)
+    public int Workchain { get; set; }
+    
+    // Account ID as 32 bytes (256 bits)
+    [MaxLength(32)] 
+    public byte[] Account { get; set; } = null!;
 
     public bool IsTrackingActive { get; set; } = true;
 }

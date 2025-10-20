@@ -78,31 +78,31 @@ public class BlockProcessor(
             int trackedTransactionsFound = 0;
             foreach (var tx in transactionsResult.TransactionIds)
             {
-                string accountAddress = new Address(shard.Workchain, tx.Account).ToString();
-                
-                if (!await addressBloomFilter.ContainsAsync(accountAddress))
+                // Use bytes directly for bloom filter check
+                if (!await addressBloomFilter.ContainsAsync(tx.Account))
                     continue;
 
-                logger.LogInformation("Bloom filter matched address {Address} in block {Shard}:{Seqno}", accountAddress, shard.Shard, shard.Seqno);
+                string addressStr = new Address(shard.Workchain, tx.Account).ToString();
+                logger.LogInformation("Bloom filter matched address {Address} in block {Shard}:{Seqno}", addressStr, shard.Shard, shard.Seqno);
 
                 // Bloom filter might give false positives, so we need to check if the address is actually in the database and active
                 TrackedAddress? trackedAddress = await dbContext.TrackedAddresses.AsNoTracking()
-                    .FirstOrDefaultAsync(x => x.Address == accountAddress, stoppingToken);
+                    .FirstOrDefaultAsync(x => x.Workchain == shard.Workchain && x.Account == tx.Account, stoppingToken);
                 if (trackedAddress is null)
                 {
-                    logger.LogWarning("Address {Address} matched bloom filter but NOT in database", accountAddress);
+                    logger.LogWarning("Address {Address} matched bloom filter but NOT in database", addressStr);
                     continue;
                 }
                 
                 if (!trackedAddress.IsTrackingActive)
                 {
-                    logger.LogInformation("Address {Address} found but tracking is inactive", accountAddress);
+                    logger.LogInformation("Address {Address} found but tracking is inactive", addressStr);
                     continue;
                 }
 
                 // Process transaction
                 trackedTransactionsFound++;
-                await ProcessTransaction(accountAddress, Convert.ToBase64String(tx.Hash), (ulong)tx.Lt, botClient, stoppingToken);
+                await ProcessTransaction(addressStr, Convert.ToBase64String(tx.Hash), (ulong)tx.Lt, botClient, stoppingToken);
             }
 
             shard.MarkAsProcessed();
