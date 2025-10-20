@@ -17,10 +17,6 @@ public class ShardBlock
 
     public long Seqno { get; set; }
 
-    public string RootHash { get; set; } = null!;
-
-    public string FileHash { get; set; } = null!;
-
     public bool IsProcessed { get; set; }
 
     public DateTime? ProcessedAt { get; set; }

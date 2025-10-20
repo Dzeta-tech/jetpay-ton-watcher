@@ -43,14 +43,14 @@ public class BlockProcessor(
     {
         try
         {
-            // Get shard transactions
-            BlockIdExtended blockId = new(
-                shard.Workchain,
-                Convert.FromBase64String(shard.RootHash),
-                Convert.FromBase64String(shard.FileHash),
-                shard.Shard,
-                (int)shard.Seqno
-            );
+            // Lookup the block to get the correct root hash and file hash
+            BlockIdExtended? blockId = await liteClientProvider.LookupBlockAsync(shard.Workchain, shard.Shard, shard.Seqno);
+            
+            if (blockId == null)
+            {
+                logger.LogWarning("Block {Shard}:{Seqno} not found, will retry later", shard.Shard, shard.Seqno);
+                return;
+            }
 
             ListBlockTransactionsResult transactionsResult = await liteClientProvider.GetBlockTransactionsAsync(blockId);
 

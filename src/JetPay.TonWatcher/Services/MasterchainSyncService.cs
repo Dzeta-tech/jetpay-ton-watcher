@@ -56,21 +56,14 @@ public class MasterchainSyncService(
 
     async Task ProcessOldShardBlocks(BlockIdExtended shard, long seqno, ApplicationDbContext dbContext) 
     {
-        BlockIdExtended? block = await liteClientProvider.LookupBlockAsync(shard.Workchain, shard.Shard, seqno);
-        
-        if (block is null)
-            return;
-
         ShardBlock shardBlock = new()
         {
-            Workchain = block.Workchain,
-            Shard = block.Shard,
-            Seqno = block.Seqno,
-            RootHash = Convert.ToBase64String(block.RootHash),
-            FileHash = Convert.ToBase64String(block.FileHash)
+            Workchain = shard.Workchain,
+            Shard = shard.Shard,
+            Seqno = seqno
         };
         await dbContext.ShardBlocks.AddAsync(shardBlock);
-        await dbContext.SaveChangesAsync(); // TODO: This is not the best way to do this, but it's the only way to get the id of the shard block
+        await dbContext.SaveChangesAsync();
     }
 
     async Task ProcessShardBlock(BlockIdExtended shard, ApplicationDbContext dbContext)
@@ -80,9 +73,7 @@ public class MasterchainSyncService(
         {
             Workchain = shard.Workchain,
             Shard = shard.Shard,
-            Seqno = shard.Seqno,
-            RootHash = Convert.ToBase64String(shard.RootHash),
-            FileHash = Convert.ToBase64String(shard.FileHash)
+            Seqno = shard.Seqno
         };
         await dbContext.ShardBlocks.AddAsync(shardBlock);
     }
