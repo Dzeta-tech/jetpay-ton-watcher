@@ -10,7 +10,7 @@ public class AppConfiguration : BaseConfiguration
     [Required] public LiteClientConfiguration LiteClient { get; set; } = null!;
 }
 
-public class LiteClientConfiguration
+public class LiteClientConfiguration : BaseConfiguration
 {
     [Required] public string Host { get; set; } = null!;
     [Required] public int Port { get; set; }
