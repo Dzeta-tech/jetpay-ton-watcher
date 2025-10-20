@@ -13,7 +13,7 @@ public class BlockProcessor(
     LiteClientProvider liteClientProvider,
     IServiceScopeFactory scopeFactory) : BackgroundService
 {
-    readonly TimeSpan syncInterval = TimeSpan.FromSeconds(1); // Often check for new blocks
+    readonly TimeSpan syncInterval = TimeSpan.FromMilliseconds(100); // Check frequently for new blocks
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -28,13 +28,18 @@ public class BlockProcessor(
             ShardBlock[] unprocessedBlocks = await dbContext.ShardBlocks.Where(x => !x.IsProcessed)
                 .OrderBy(x => x.Shard).ThenBy(x => x.Seqno)
                 .ToArrayAsync(stoppingToken);
-            foreach (ShardBlock block in unprocessedBlocks)
-                await ProcessShard(block, dbContext, addressBloomFilter, botClient, stoppingToken);
-
-            if (unprocessedBlocks.Length > 0)
-                await dbContext.SaveChangesAsync(stoppingToken);
-            else
+            
+            if (unprocessedBlocks.Length == 0)
+            {
                 await Task.Delay(syncInterval, stoppingToken);
+                continue;
+            }
+            
+            foreach (ShardBlock block in unprocessedBlocks)
+            {
+                await ProcessShard(block, dbContext, addressBloomFilter, botClient, stoppingToken);
+                await dbContext.SaveChangesAsync(stoppingToken); // Save after each block
+            }
         }
     }
 
@@ -92,6 +97,11 @@ public class BlockProcessor(
             }
 
             shard.MarkAsProcessed();
+        }
+        catch (TimeoutException ex)
+        {
+            logger.LogWarning(ex, "Timeout processing shard {Shard}:{Seqno}, will retry later", shard.Shard, shard.Seqno);
+            // Don't mark as processed - will retry
         }
         catch (Exception ex)
         {

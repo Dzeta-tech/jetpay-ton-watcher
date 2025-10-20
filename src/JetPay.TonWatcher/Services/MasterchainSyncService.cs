@@ -10,26 +10,38 @@ public class MasterchainSyncService(
     LiteClientProvider liteClientProvider,
     IServiceScopeFactory scopeFactory) : BackgroundService
 {
-    readonly TimeSpan syncInterval = TimeSpan.FromSeconds(2);
+    readonly TimeSpan syncInterval = TimeSpan.FromMilliseconds(100);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            using IServiceScope scope = scopeFactory.CreateScope();
-            ApplicationDbContext dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            try
+            {
+                using IServiceScope scope = scopeFactory.CreateScope();
+                ApplicationDbContext dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-            MasterChainInfoExtended masterchainInfo = await liteClientProvider.GetMasterChainInfoAsync();
-            
-            // Get actual shards
-            BlockIdExtended[] shards = await liteClientProvider.GetShardsAsync(masterchainInfo.LastBlockId);
-            if (shards == null || shards.Length == 0)
-                goto Delay;
+                MasterChainInfoExtended masterchainInfo = await liteClientProvider.GetMasterChainInfoAsync();
+                
+                // Get actual shards
+                BlockIdExtended[] shards = await liteClientProvider.GetShardsAsync(masterchainInfo.LastBlockId);
+                if (shards == null || shards.Length == 0)
+                    goto Delay;
 
-            foreach (BlockIdExtended shard in shards)
-                await ProcessShard(shard, dbContext);
-
-            await dbContext.SaveChangesAsync(stoppingToken);
+                foreach (BlockIdExtended shard in shards)
+                {
+                    await ProcessShard(shard, dbContext);
+                    await dbContext.SaveChangesAsync(stoppingToken); // Save after each shard
+                }
+            }
+            catch (TimeoutException ex)
+            {
+                logger.LogWarning(ex, "Timeout in masterchain sync, will retry");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error in masterchain sync, will retry");
+            }
 
             Delay:
             await Task.Delay(syncInterval, stoppingToken);

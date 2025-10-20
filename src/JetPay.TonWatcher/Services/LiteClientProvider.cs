@@ -82,7 +82,16 @@ public class LiteClientProvider : IAsyncDisposable
         if (!lease.IsAcquired)
             throw new InvalidOperationException("Failed to acquire rate limit token");
         
-        return await operation(client);
+        // Add timeout to prevent hanging on API calls
+        using CancellationTokenSource cts = new(TimeSpan.FromSeconds(30));
+        try
+        {
+            return await operation(client).WaitAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            throw new TimeoutException("LiteClient operation timed out after 30 seconds");
+        }
     }
 
     public async Task<MasterChainInfoExtended> GetMasterChainInfoAsync()
