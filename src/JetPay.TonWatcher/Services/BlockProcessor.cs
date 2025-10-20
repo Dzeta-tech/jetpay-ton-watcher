@@ -43,8 +43,6 @@ public class BlockProcessor(
     {
         try
         {
-            logger.LogInformation("Processing shard {Shard} {Seqno}", shard.Shard, shard.Seqno);
-
             // Get shard transactions
             BlockIdExtended blockId = new(
                 shard.Workchain,
@@ -58,36 +56,53 @@ public class BlockProcessor(
 
             if (transactionsResult.InComplete)
             {
-                logger.LogWarning("Block {Shard} {Seqno} transactions incomplete, skipping", shard.Shard, shard.Seqno);
+                logger.LogWarning("Block {Shard}:{Seqno} incomplete, marking as processed", shard.Shard, shard.Seqno);
+                shard.MarkAsProcessed();
                 return;
             }
 
             if (transactionsResult.TransactionIds == null || transactionsResult.TransactionIds.Length == 0)
+            {
+                shard.MarkAsProcessed();
                 return;
+            }
 
+            int trackedTransactionsFound = 0;
             foreach (var tx in transactionsResult.TransactionIds)
             {
                 string accountAddress = new Address(shard.Workchain, tx.Account).ToString();
+                
                 if (!await addressBloomFilter.ContainsAsync(accountAddress))
                     continue;
+
+                logger.LogInformation("Bloom filter matched address {Address} in block {Shard}:{Seqno}", accountAddress, shard.Shard, shard.Seqno);
 
                 // Bloom filter might give false positives, so we need to check if the address is actually in the database and active
                 TrackedAddress? trackedAddress = await dbContext.TrackedAddresses.AsNoTracking()
                     .FirstOrDefaultAsync(x => x.Address == accountAddress, stoppingToken);
-                if (trackedAddress is null || !trackedAddress.IsTrackingActive)
+                if (trackedAddress is null)
+                {
+                    logger.LogWarning("Address {Address} matched bloom filter but NOT in database", accountAddress);
                     continue;
+                }
+                
+                if (!trackedAddress.IsTrackingActive)
+                {
+                    logger.LogInformation("Address {Address} found but tracking is inactive", accountAddress);
+                    continue;
+                }
 
                 // Process transaction
+                trackedTransactionsFound++;
                 await ProcessTransaction(accountAddress, Convert.ToBase64String(tx.Hash), (ulong)tx.Lt, botClient, stoppingToken);
             }
 
             shard.MarkAsProcessed();
-            logger.LogInformation("Shard {Shard} {Seqno} processed", shard.Shard, shard.Seqno);
         }
-        catch (Exception ex) when (ex.Message.Contains("LITE_SERVER_NOTREADY"))
+        catch (Exception ex)
         {
-            logger.LogWarning(ex, "Lite server not ready, skipping shard {Shard} {Seqno}", shard.Shard, shard.Seqno);
-            return;
+            logger.LogError(ex, "Error processing shard {Shard}:{Seqno}, marking as processed to avoid infinite loop", shard.Shard, shard.Seqno);
+            shard.MarkAsProcessed();
         }
     }
 
