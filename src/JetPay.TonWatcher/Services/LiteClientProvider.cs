@@ -33,9 +33,47 @@ public class LiteClientProvider : IAsyncDisposable
 
     public async Task InitializeAsync()
     {
-        logger.LogInformation("Connecting to LiteClient...");
-        await client.Connect();
-        logger.LogInformation("LiteClient connected successfully");
+        const int maxRetries = 3;
+        const int timeoutSeconds = 5;
+        
+        for (int attempt = 1; attempt <= maxRetries; attempt++)
+        {
+            try
+            {
+                logger.LogInformation("Connecting to LiteClient (attempt {Attempt}/{MaxRetries})...", attempt, maxRetries);
+                
+                using CancellationTokenSource cts = new(TimeSpan.FromSeconds(timeoutSeconds));
+                await client.Connect().WaitAsync(cts.Token);
+                
+                logger.LogInformation("LiteClient connected successfully");
+                return;
+            }
+            catch (TimeoutException ex)
+            {
+                logger.LogWarning(ex, "LiteClient connection timeout on attempt {Attempt}/{MaxRetries}", attempt, maxRetries);
+                if (attempt == maxRetries)
+                    throw new Exception($"Failed to connect to LiteClient after {maxRetries} attempts", ex);
+            }
+            catch (OperationCanceledException ex)
+            {
+                logger.LogWarning(ex, "LiteClient connection timeout on attempt {Attempt}/{MaxRetries}", attempt, maxRetries);
+                if (attempt == maxRetries)
+                    throw new Exception($"Failed to connect to LiteClient after {maxRetries} attempts", ex);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "LiteClient connection error on attempt {Attempt}/{MaxRetries}", attempt, maxRetries);
+                if (attempt == maxRetries)
+                    throw;
+            }
+            
+            if (attempt < maxRetries)
+            {
+                int delaySeconds = attempt * 2; // Exponential backoff: 2s, 4s
+                logger.LogInformation("Retrying in {Delay} seconds...", delaySeconds);
+                await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
+            }
+        }
     }
 
     public async Task<T> ExecuteAsync<T>(Func<LiteClient, Task<T>> operation)

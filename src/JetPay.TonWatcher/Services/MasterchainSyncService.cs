@@ -45,36 +45,16 @@ public class MasterchainSyncService(
         if (maxSeqno == 0)
             maxSeqno = shard.Seqno - 1;
 
-        // Process missed shard blocks
-        for (long seqno = maxSeqno + 1; seqno < shard.Seqno; seqno++)
-            await ProcessOldShardBlocks(shard, seqno, dbContext);
-
-        // Process current shard block if needed
-        if (maxSeqno < shard.Seqno)
-            await ProcessShardBlock(shard, dbContext);
-    }
-
-    async Task ProcessOldShardBlocks(BlockIdExtended shard, long seqno, ApplicationDbContext dbContext) 
-    {
-        ShardBlock shardBlock = new()
+        // Add all missing blocks from maxSeqno to current shard.Seqno
+        for (long seqno = maxSeqno + 1; seqno <= shard.Seqno; seqno++)
         {
-            Workchain = shard.Workchain,
-            Shard = shard.Shard,
-            Seqno = seqno
-        };
-        await dbContext.ShardBlocks.AddAsync(shardBlock);
-        await dbContext.SaveChangesAsync();
-    }
-
-    async Task ProcessShardBlock(BlockIdExtended shard, ApplicationDbContext dbContext)
-    {
-        // Just add shard block to database
-        ShardBlock shardBlock = new()
-        {
-            Workchain = shard.Workchain,
-            Shard = shard.Shard,
-            Seqno = shard.Seqno
-        };
-        await dbContext.ShardBlocks.AddAsync(shardBlock);
+            ShardBlock shardBlock = new()
+            {
+                Workchain = shard.Workchain,
+                Shard = shard.Shard,
+                Seqno = seqno
+            };
+            await dbContext.ShardBlocks.AddAsync(shardBlock);
+        }
     }
 }
