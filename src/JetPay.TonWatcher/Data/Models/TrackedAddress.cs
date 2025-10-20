@@ -16,5 +16,14 @@ public class TrackedAddress
     [MaxLength(32)] 
     public byte[] Account { get; set; } = null!;
 
+    // Address type: TON or Jetton
+    public TrackedAddressType Type { get; set; } = TrackedAddressType.TON;
+
     public bool IsTrackingActive { get; set; } = true;
+}
+
+public enum TrackedAddressType
+{
+    TON,
+    Jetton
 }

@@ -18,7 +18,7 @@ public class ApiController(
     }
 
     [HttpPost("api/v1/tracked-addresses/add/{address}")]
-    public async Task<IActionResult> AddTrackedAddress(string address)
+    public async Task<IActionResult> AddTrackedAddress(string address, [FromQuery] string type = "TON")
     {
         if (string.IsNullOrEmpty(address))
             return BadRequest("Address is required");
@@ -33,10 +33,14 @@ public class ApiController(
             return BadRequest($"Invalid address format: {ex.Message}");
         }
 
+        if (!Enum.TryParse<TrackedAddressType>(type, true, out TrackedAddressType addressType))
+            return BadRequest($"Invalid address type. Must be 'TON' or 'Jetton'");
+
         TrackedAddress trackedAddress = new() 
         { 
             Workchain = parsedAddress.GetWorkchain(),
-            Account = parsedAddress.GetHash()
+            Account = parsedAddress.GetHash(),
+            Type = addressType
         };
 
         await dbContext.TrackedAddresses.AddAsync(trackedAddress);
@@ -44,6 +48,6 @@ public class ApiController(
 
         await addressBloomFilter.AddAsync(parsedAddress.GetHash());
 
-        return Ok("Address added to tracking");
+        return Ok($"{addressType} address added to tracking");
     }
 }

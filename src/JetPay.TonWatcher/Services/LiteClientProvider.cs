@@ -2,8 +2,11 @@ using System.Threading.RateLimiting;
 using JetPay.TonWatcher.Configuration;
 using TonSdk.Adnl.LiteClient;
 using TonSdk.Client;
+using TonSdk.Core;
 using TonSdk.Core.Boc;
+using AccountState = TonSdk.Client.AccountState;
 using BlockIdExtended = TonSdk.Adnl.LiteClient.BlockIdExtended;
+using TransactionId = TonSdk.Client.TransactionId;
 
 namespace JetPay.TonWatcher.Services;
 
@@ -117,6 +120,13 @@ public class LiteClientProvider : IAsyncDisposable
         return await ExecuteAsync(client => client.ListBlockTransactions(blockId, count));
     }
 
+    public async Task<Coins> GetAccountBalanceAsync(string address)
+    {
+        Address addr = new(address);
+        var addressInfo = await GetAddressInformation(addr);
+        return addressInfo.Balance;
+    }
+
     BlockIdExtended[] DeserializeShardsInformationResult(byte[] data)
     {
         Cell[]? cells = BagOfCells.DeserializeBoc(new Bits(data));
@@ -185,6 +195,78 @@ public class LiteClientProvider : IAsyncDisposable
             LoadBinTreeR(slice.LoadRef().Parse(), ref shards);
         }
     }
+    
+    internal async Task<AddressInformationResult> GetAddressInformation(Address address, BlockIdExtended? block = null)
+        {
+            AddressInformationResult result = new();
+            AccountStateResult? res = await ExecuteAsync(client => client.GetAccountState(address, block));
+            
+            byte[] accountStateBytes = res.State;
+            if (accountStateBytes.Length == 0)
+            {
+                result.State = AccountState.Uninit;
+                return result;
+            }
+            
+            CellSlice slice = Cell.From(new Bits(accountStateBytes)).Parse();
+            
+            slice.LoadBit(); // tag
+            slice.LoadAddress(); // skip address (not needed)
+
+            slice.LoadVarUInt(7);
+            slice.LoadVarUInt(7);
+            slice.LoadVarUInt(7);
+
+            slice.LoadUInt32LE();
+            
+            if (slice.LoadBit())
+                slice.LoadCoins();
+
+            result.LastTransactionId = new TransactionId()
+            {
+                Lt = (ulong)slice.LoadUInt(64),
+            };
+            result.Balance = slice.LoadCoins();
+            
+            HashmapOptions<int, int> hmOptions = new()
+            {
+                KeySize = 32,
+                Serializers = null,
+                Deserializers = null
+            };
+
+            slice.LoadDict(hmOptions);
+
+            if (slice.LoadBit()) // active
+            {
+                result.State = AccountState.Active;
+                if(slice.LoadBit())
+                    slice.LoadUInt(5);
+                
+                if (slice.LoadBit())
+                {
+                    slice.LoadBit();
+                    slice.LoadBit();
+                }
+
+                if (slice.LoadBit())
+                    result.Code = slice.LoadRef();
+                
+                if (slice.LoadBit())
+                    result.Data = slice.LoadRef();
+                
+                if (slice.LoadBit())
+                    slice.LoadRef();
+            }
+            else if (slice.LoadBit()) // frozen
+            {
+                result.State = AccountState.Frozen;
+                result.FrozenHash = slice.LoadBits(256).ToString("base64");
+            }
+            else result.State = AccountState.Uninit;
+            
+            return result;
+        }
 
     public async ValueTask DisposeAsync()
     {

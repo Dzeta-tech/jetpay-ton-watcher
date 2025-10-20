@@ -4,7 +4,10 @@ using JetPay.TonWatcher.Data.Models;
 using Microsoft.EntityFrameworkCore;
 using Telegram.Bot;
 using TonSdk.Adnl.LiteClient;
+using TonSdk.Client;
 using TonSdk.Core;
+using BlockIdExtended = TonSdk.Adnl.LiteClient.BlockIdExtended;
+using TransactionId = TonSdk.Adnl.LiteClient.TransactionId;
 
 namespace JetPay.TonWatcher.Services;
 
@@ -67,7 +70,7 @@ public class BlockProcessor(
             }
 
             int trackedTransactionsFound = 0;
-            foreach (var tx in transactionsResult.TransactionIds)
+            foreach (TransactionId? tx in transactionsResult.TransactionIds)
             {
                 // Use bytes directly for bloom filter check
                 if (!await addressBloomFilter.ContainsAsync(tx.Account))
@@ -93,7 +96,7 @@ public class BlockProcessor(
 
                 // Process transaction
                 trackedTransactionsFound++;
-                await ProcessTransaction(addressStr, Convert.ToBase64String(tx.Hash), (ulong)tx.Lt, botClient, stoppingToken);
+                await ProcessTransaction(addressStr, trackedAddress.Type, Convert.ToBase64String(tx.Hash), (ulong)tx.Lt, botClient, stoppingToken);
             }
 
             shard.MarkAsProcessed();
@@ -110,12 +113,36 @@ public class BlockProcessor(
         }
     }
 
-    async Task ProcessTransaction(string account, string txHash, ulong lt, TelegramBotClient botClient,
+    async Task ProcessTransaction(string account, TrackedAddressType addressType, string txHash, ulong lt, TelegramBotClient botClient,
         CancellationToken stoppingToken)
     {
-        // TODO: Implement transaction processing
-        logger.LogWarning("Found transaction {Account}. TxHash {Hash} Lt {Lt}", account, txHash, lt);
-        await botClient.SendMessage(731818836, $"Found transaction {txHash} (Lt: {lt})",
-            cancellationToken: stoppingToken);
+        string message = $"💰 Transaction found!\n\n" +
+                        $"Address: {account}\n" +
+                        $"Type: {addressType}\n" +
+                        $"TxHash: {txHash}\n" +
+                        $"Lt: {lt}";
+
+        // For TON addresses, fetch and display balance
+        if (addressType == TrackedAddressType.TON)
+        {
+            try
+            {
+                Coins balance = await liteClientProvider.GetAccountBalanceAsync(account);
+                message += $"\n\n💎 Current Balance: {balance} TON";
+                logger.LogWarning("Found TON transaction {Account}. TxHash {Hash} Lt {Lt} Balance {Balance} TON", 
+                    account, txHash, lt, balance);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to fetch balance for {Account}", account);
+                message += $"\n\n⚠️ Could not fetch balance";
+            }
+        }
+        else
+        {
+            logger.LogWarning("Found Jetton transaction {Account}. TxHash {Hash} Lt {Lt}", account, txHash, lt);
+        }
+
+        await botClient.SendMessage(731818836, message, cancellationToken: stoppingToken);
     }
 }
