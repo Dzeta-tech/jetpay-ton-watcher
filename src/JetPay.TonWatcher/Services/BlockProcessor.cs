@@ -56,9 +56,17 @@ public class BlockProcessor(
 
             if (transactionsResult.InComplete)
             {
-                logger.LogWarning("Block {Shard}:{Seqno} incomplete, marking as processed", shard.Shard, shard.Seqno);
-                shard.MarkAsProcessed();
-                return;
+                logger.LogWarning("Block {Shard}:{Seqno} has more than {Count} transactions, requesting more", 
+                    shard.Shard, shard.Seqno, transactionsResult.TransactionIds?.Length ?? 0);
+                
+                // Try with a much higher count
+                transactionsResult = await liteClientProvider.GetBlockTransactionsAsync(blockId, 100000);
+                
+                if (transactionsResult.InComplete)
+                {
+                    logger.LogError("Block {Shard}:{Seqno} still incomplete even with 100k limit, skipping", shard.Shard, shard.Seqno);
+                    return;
+                }
             }
 
             if (transactionsResult.TransactionIds == null || transactionsResult.TransactionIds.Length == 0)
