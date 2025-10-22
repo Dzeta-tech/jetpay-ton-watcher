@@ -1,7 +1,13 @@
+using System.Reflection;
 using System.Text.Json.Serialization;
+using BloomFilter;
 using Dzeta.Configuration;
-using JetPay.TonWatcher.Data;
-using JetPay.TonWatcher.Services;
+using JetPay.TonWatcher.Application.Interfaces;
+using JetPay.TonWatcher.Infrastructure.BackgroundServices;
+using JetPay.TonWatcher.Infrastructure.LiteClient;
+using JetPay.TonWatcher.Infrastructure.Messaging;
+using JetPay.TonWatcher.Infrastructure.Persistence;
+using JetPay.TonWatcher.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Serilog.Events;
@@ -53,11 +59,29 @@ public static class DependencyInjection
 
     public static void UseServices(this WebApplicationBuilder builder)
     {
-        builder.Services.AddSingleton<LiteClientProvider>();
+        // MediatR
+        builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly()));
+
+        // Repositories
+        builder.Services.AddScoped<ITrackedAddressRepository, TrackedAddressRepository>();
+        builder.Services.AddScoped<IShardBlockRepository, ShardBlockRepository>();
+
+        // Infrastructure Services
+        builder.Services.AddSingleton<ILiteClientService, LiteClientService>();
+        builder.Services.AddSingleton<IMessagePublisher, RabbitMqPublisher>();
+
+        // Bloom Filter
         builder.Services.AddBloomFilter(setupAction => { setupAction.UseInMemory(); });
+
+        // Telegram Bot
+        builder.Services.AddSingleton(serviceProvider =>
+        {
+            AppConfiguration config = serviceProvider.GetRequiredService<AppConfiguration>();
+            return new TelegramBotClient(config.Telegram.BotToken);
+        });
+
+        // Background Services
         builder.Services.AddHostedService<MasterchainSyncService>();
-        builder.Services.AddHostedService<BlockProcessor>();
-        builder.Services.AddSingleton<TelegramBotClient>(serviceProvider =>
-            new TelegramBotClient(serviceProvider.GetRequiredService<AppConfiguration>().BotToken));
+        builder.Services.AddHostedService<BlockProcessorService>();
     }
 }

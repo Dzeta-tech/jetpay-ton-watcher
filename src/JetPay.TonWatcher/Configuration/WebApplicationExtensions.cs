@@ -1,6 +1,6 @@
 using BloomFilter;
-using JetPay.TonWatcher.Data;
-using JetPay.TonWatcher.Services;
+using JetPay.TonWatcher.Application.Interfaces;
+using JetPay.TonWatcher.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 
@@ -47,14 +47,21 @@ public static class WebApplicationExtensions
     {
         using IServiceScope scope = app.Services.CreateScope();
 
-        LiteClientProvider liteClientProvider = scope.ServiceProvider.GetRequiredService<LiteClientProvider>();
-        await liteClientProvider.InitializeAsync();
+        // Initialize LiteClient
+        ILiteClientService liteClientService = scope.ServiceProvider.GetRequiredService<ILiteClientService>();
+        await liteClientService.InitializeAsync();
 
+        // Initialize Bloom Filter with existing tracked addresses
         ApplicationDbContext dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         IBloomFilter bloomFilter = scope.ServiceProvider.GetRequiredService<IBloomFilter>();
-        byte[][] trackedAccounts = await dbContext.TrackedAddresses.Where(x => x.IsTrackingActive)
-            .Select(x => x.Account).ToArrayAsync();
+        byte[][] trackedAccounts = await dbContext.TrackedAddresses
+            .Where(x => x.IsTrackingActive)
+            .Select(x => x.Account)
+            .ToArrayAsync();
+        
         foreach (byte[] account in trackedAccounts)
             await bloomFilter.AddAsync(account);
+
+        Log.Information("Initialized bloom filter with {Count} tracked addresses", trackedAccounts.Length);
     }
 }
