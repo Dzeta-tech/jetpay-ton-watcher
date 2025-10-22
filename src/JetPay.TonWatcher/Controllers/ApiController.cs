@@ -6,19 +6,19 @@ using TonSdk.Core;
 
 namespace JetPay.TonWatcher.Controllers;
 
+[Route("api/v1")]
 public class ApiController(
-    ILogger<ApiController> logger,
     ApplicationDbContext dbContext,
     IBloomFilter addressBloomFilter) : ControllerBase
 {
-    [HttpGet("api/v1/status")]
+    [HttpGet("status")]
     public IActionResult GetStatus()
     {
         return Ok("OK");
     }
 
-    [HttpPost("api/v1/tracked-addresses/add/{address}")]
-    public async Task<IActionResult> AddTrackedAddress(string address, [FromQuery] string type = "TON")
+    [HttpPost("tracked-addresses/add/{address}")]
+    public async Task<IActionResult> AddTrackedAddress(string address)
     {
         if (string.IsNullOrEmpty(address))
             return BadRequest("Address is required");
@@ -33,14 +33,10 @@ public class ApiController(
             return BadRequest($"Invalid address format: {ex.Message}");
         }
 
-        if (!Enum.TryParse<TrackedAddressType>(type, true, out TrackedAddressType addressType))
-            return BadRequest($"Invalid address type. Must be 'TON' or 'Jetton'");
-
-        TrackedAddress trackedAddress = new() 
-        { 
+        TrackedAddress trackedAddress = new()
+        {
             Workchain = parsedAddress.GetWorkchain(),
-            Account = parsedAddress.GetHash(),
-            Type = addressType
+            Account = parsedAddress.GetHash()
         };
 
         await dbContext.TrackedAddresses.AddAsync(trackedAddress);
@@ -48,6 +44,6 @@ public class ApiController(
 
         await addressBloomFilter.AddAsync(parsedAddress.GetHash());
 
-        return Ok($"{addressType} address added to tracking");
+        return Ok("Address added to tracking");
     }
 }

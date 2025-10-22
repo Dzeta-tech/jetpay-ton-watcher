@@ -3,6 +3,7 @@ using System;
 using JetPay.TonWatcher.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace JetPay.TonWatcher.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251022114310_RemoveAddressType")]
+    partial class RemoveAddressType
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -56,7 +59,6 @@ namespace JetPay.TonWatcher.Migrations
 
                     b.Property<byte[]>("Account")
                         .IsRequired()
-                        .HasMaxLength(32)
                         .HasColumnType("bytea");
 
                     b.Property<bool>("IsTrackingActive")

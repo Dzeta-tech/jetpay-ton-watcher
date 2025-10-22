@@ -22,7 +22,7 @@ public class MasterchainSyncService(
                 ApplicationDbContext dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
                 MasterChainInfoExtended masterchainInfo = await liteClientProvider.GetMasterChainInfoAsync();
-                
+
                 // Get actual shards
                 BlockIdExtended[] shards = await liteClientProvider.GetShardsAsync(masterchainInfo.LastBlockId);
                 if (shards == null || shards.Length == 0)
@@ -53,7 +53,7 @@ public class MasterchainSyncService(
         // Search for max seqno of this shard in database
         long maxSeqno = await dbContext.ShardBlocks.AsNoTracking().Where(x => x.Shard == shard.Shard)
             .OrderByDescending(x => x.Seqno).Select(x => x.Seqno).FirstOrDefaultAsync();
-        
+
         if (maxSeqno == 0)
             maxSeqno = shard.Seqno - 1;
 

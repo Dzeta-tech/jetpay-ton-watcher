@@ -4,7 +4,6 @@ using JetPay.TonWatcher.Data.Models;
 using Microsoft.EntityFrameworkCore;
 using Telegram.Bot;
 using TonSdk.Adnl.LiteClient;
-using TonSdk.Client;
 using TonSdk.Core;
 using BlockIdExtended = TonSdk.Adnl.LiteClient.BlockIdExtended;
 using TransactionId = TonSdk.Adnl.LiteClient.TransactionId;
@@ -31,13 +30,13 @@ public class BlockProcessor(
             ShardBlock[] unprocessedBlocks = await dbContext.ShardBlocks.Where(x => !x.IsProcessed)
                 .OrderBy(x => x.Shard).ThenBy(x => x.Seqno)
                 .ToArrayAsync(stoppingToken);
-            
+
             if (unprocessedBlocks.Length == 0)
             {
                 await Task.Delay(syncInterval, stoppingToken);
                 continue;
             }
-            
+
             foreach (ShardBlock block in unprocessedBlocks)
             {
                 await ProcessShard(block, dbContext, addressBloomFilter, botClient, stoppingToken);
@@ -52,8 +51,9 @@ public class BlockProcessor(
         try
         {
             // Lookup the block to get the correct root hash and file hash
-            BlockIdExtended? blockId = await liteClientProvider.LookupBlockAsync(shard.Workchain, shard.Shard, shard.Seqno);
-            
+            BlockIdExtended? blockId =
+                await liteClientProvider.LookupBlockAsync(shard.Workchain, shard.Shard, shard.Seqno);
+
             if (blockId == null)
             {
                 logger.LogWarning("Block {Shard}:{Seqno} not found, will retry later", shard.Shard, shard.Seqno);
@@ -61,7 +61,8 @@ public class BlockProcessor(
             }
 
             // Get all transactions from the block (with high limit to avoid incomplete results)
-            ListBlockTransactionsResult transactionsResult = await liteClientProvider.GetBlockTransactionsAsync(blockId, 100000);
+            ListBlockTransactionsResult transactionsResult =
+                await liteClientProvider.GetBlockTransactionsAsync(blockId, 100000);
 
             if (transactionsResult.TransactionIds == null || transactionsResult.TransactionIds.Length == 0)
             {
@@ -77,7 +78,8 @@ public class BlockProcessor(
                     continue;
 
                 string addressStr = new Address(shard.Workchain, tx.Account).ToString();
-                logger.LogInformation("Bloom filter matched address {Address} in block {Shard}:{Seqno}", addressStr, shard.Shard, shard.Seqno);
+                logger.LogInformation("Bloom filter matched address {Address} in block {Shard}:{Seqno}", addressStr,
+                    shard.Shard, shard.Seqno);
 
                 // Bloom filter might give false positives, so we need to check if the address is actually in the database and active
                 TrackedAddress? trackedAddress = await dbContext.TrackedAddresses.AsNoTracking()
@@ -87,7 +89,7 @@ public class BlockProcessor(
                     logger.LogWarning("Address {Address} matched bloom filter but NOT in database", addressStr);
                     continue;
                 }
-                
+
                 if (!trackedAddress.IsTrackingActive)
                 {
                     logger.LogInformation("Address {Address} found but tracking is inactive", addressStr);
@@ -96,52 +98,36 @@ public class BlockProcessor(
 
                 // Process transaction
                 trackedTransactionsFound++;
-                await ProcessTransaction(addressStr, trackedAddress.Type, Convert.ToBase64String(tx.Hash), (ulong)tx.Lt, botClient, stoppingToken);
+                await ProcessTransaction(addressStr, Convert.ToBase64String(tx.Hash), (ulong)tx.Lt,
+                    botClient, stoppingToken);
             }
 
             shard.MarkAsProcessed();
         }
         catch (TimeoutException ex)
         {
-            logger.LogWarning(ex, "Timeout processing shard {Shard}:{Seqno}, will retry later", shard.Shard, shard.Seqno);
+            logger.LogWarning(ex, "Timeout processing shard {Shard}:{Seqno}, will retry later", shard.Shard,
+                shard.Seqno);
             // Don't mark as processed - will retry
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error processing shard {Shard}:{Seqno}, marking as processed to avoid infinite loop", shard.Shard, shard.Seqno);
+            logger.LogError(ex, "Error processing shard {Shard}:{Seqno}, marking as processed to avoid infinite loop",
+                shard.Shard, shard.Seqno);
             shard.MarkAsProcessed();
         }
     }
 
-    async Task ProcessTransaction(string account, TrackedAddressType addressType, string txHash, ulong lt, TelegramBotClient botClient,
+    async Task ProcessTransaction(string account, string txHash, ulong lt,
+        TelegramBotClient botClient,
         CancellationToken stoppingToken)
     {
         string message = $"💰 Transaction found!\n\n" +
-                        $"Address: {account}\n" +
-                        $"Type: {addressType}\n" +
-                        $"TxHash: {txHash}\n" +
-                        $"Lt: {lt}";
+                         $"Address: {account}\n" +
+                         $"TxHash: {txHash}\n" +
+                         $"Lt: {lt}";
 
-        // For TON addresses, fetch and display balance
-        if (addressType == TrackedAddressType.TON)
-        {
-            try
-            {
-                Coins balance = await liteClientProvider.GetAccountBalanceAsync(account);
-                message += $"\n\n💎 Current Balance: {balance} TON";
-                logger.LogWarning("Found TON transaction {Account}. TxHash {Hash} Lt {Lt} Balance {Balance} TON", 
-                    account, txHash, lt, balance);
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Failed to fetch balance for {Account}", account);
-                message += $"\n\n⚠️ Could not fetch balance";
-            }
-        }
-        else
-        {
-            logger.LogWarning("Found Jetton transaction {Account}. TxHash {Hash} Lt {Lt}", account, txHash, lt);
-        }
+        logger.LogWarning("Found transaction {Account}. TxHash {Hash} Lt {Lt}", account, txHash, lt);
 
         await botClient.SendMessage(731818836, message, cancellationToken: stoppingToken);
     }
