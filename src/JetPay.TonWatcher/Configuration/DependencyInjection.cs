@@ -11,7 +11,6 @@ using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Serilog.Events;
 using StackExchange.Redis;
-using Telegram.Bot;
 
 namespace JetPay.TonWatcher.Configuration;
 
@@ -96,13 +95,6 @@ public static class DependencyInjection
 
         // Bloom Filter
         builder.Services.AddBloomFilter(setupAction => { setupAction.UseInMemory(); });
-
-        // Telegram Bot
-        builder.Services.AddSingleton(serviceProvider =>
-        {
-            AppConfiguration config = serviceProvider.GetRequiredService<AppConfiguration>();
-            return new TelegramBotClient(config.Telegram.BotToken);
-        });
 
         // Background Services
         builder.Services.AddHostedService<MasterchainSyncService>();

@@ -8,7 +8,6 @@ public class AppConfiguration : BaseConfiguration
     [Required] public DatabaseConnectionConfiguration Database { get; set; } = null!;
     [Required] public LiteClientConfiguration LiteClient { get; set; } = null!;
     [Required] public RedisConfiguration Redis { get; set; } = null!;
-    public TelegramConfiguration Telegram { get; set; } = new();
 }
 
 public class LiteClientConfiguration : BaseConfiguration
@@ -25,11 +24,4 @@ public class RedisConfiguration : BaseConfiguration
     [Required] public string Port { get; set; } = string.Empty;
     public string? User { get; set; }
     public string? Password { get; set; }
-}
-
-public class TelegramConfiguration : BaseConfiguration
-{
-    public bool Enabled { get; set; } = false;
-    public string BotToken { get; set; } = null!;
-    public long ChatId { get; set; }
 }
