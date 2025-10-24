@@ -58,7 +58,7 @@ public static class WebApplicationExtensions
             .Where(x => x.IsTrackingActive)
             .Select(x => x.Account)
             .ToArrayAsync();
-        
+
         foreach (byte[] account in trackedAccounts)
             await bloomFilter.AddAsync(account);
 

@@ -12,7 +12,8 @@ public class TrackedAddressRepository(ApplicationDbContext dbContext) : ITracked
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
     }
 
-    public async Task<TrackedAddress?> GetByAccountAsync(int workchain, byte[] account, CancellationToken cancellationToken = default)
+    public async Task<TrackedAddress?> GetByAccountAsync(int workchain, byte[] account,
+        CancellationToken cancellationToken = default)
     {
         return await dbContext.TrackedAddresses
             .AsNoTracking()
@@ -38,4 +39,3 @@ public class TrackedAddressRepository(ApplicationDbContext dbContext) : ITracked
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 }
-

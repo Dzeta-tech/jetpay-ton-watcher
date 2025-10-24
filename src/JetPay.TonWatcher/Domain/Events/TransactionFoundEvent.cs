@@ -9,4 +9,3 @@ public record TransactionFoundEvent : INotification
     public required ulong Lt { get; init; }
     public required DateTime DetectedAt { get; init; }
 }
-

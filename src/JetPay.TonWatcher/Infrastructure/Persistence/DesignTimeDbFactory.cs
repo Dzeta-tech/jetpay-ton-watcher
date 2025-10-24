@@ -7,7 +7,7 @@ public class DesignTimeDbFactory : IDesignTimeDbContextFactory<ApplicationDbCont
 {
     public ApplicationDbContext CreateDbContext(string[] args)
     {
-        string connectionString = Environment.GetEnvironmentVariable("Database__ConnectionString") 
+        string connectionString = Environment.GetEnvironmentVariable("Database__ConnectionString")
                                   ?? "Host=localhost;Database=jetpay_ton_watcher;Username=postgres;Password=postgres";
 
         DbContextOptionsBuilder<ApplicationDbContext> optionsBuilder = new();
@@ -16,4 +16,3 @@ public class DesignTimeDbFactory : IDesignTimeDbContextFactory<ApplicationDbCont
         return new ApplicationDbContext(optionsBuilder.Options);
     }
 }
-

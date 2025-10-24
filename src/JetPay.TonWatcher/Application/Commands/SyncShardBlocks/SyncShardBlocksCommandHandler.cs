@@ -21,9 +21,7 @@ public class SyncShardBlocksCommandHandler(
             BlockIdExtended[] shards = await liteClientService.GetShardsAsync(masterchainInfo.LastBlockId);
 
             if (shards == null || shards.Length == 0)
-            {
                 return new SyncShardBlocksResult { Success = true, BlocksAdded = 0 };
-            }
 
             foreach (BlockIdExtended shard in shards)
             {
@@ -62,4 +60,3 @@ public class SyncShardBlocksCommandHandler(
         return blocksAdded;
     }
 }
-

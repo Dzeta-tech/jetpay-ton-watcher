@@ -19,9 +19,9 @@ public class TelegramNotificationHandler(
         try
         {
             string message = $"Transaction found!\n\n" +
-                           $"Address: {notification.Address}\n" +
-                           $"TxHash: {notification.TxHash}\n" +
-                           $"Lt: {notification.Lt}";
+                             $"Address: {notification.Address}\n" +
+                             $"TxHash: {notification.TxHash}\n" +
+                             $"Lt: {notification.Lt}";
 
             await botClient.SendMessage(config.Telegram.ChatId, message, cancellationToken: cancellationToken);
 
@@ -33,4 +33,3 @@ public class TelegramNotificationHandler(
         }
     }
 }
-

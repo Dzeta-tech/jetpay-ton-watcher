@@ -22,10 +22,12 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
             AutoReplenishment = true,
             ReplenishmentPeriod = TimeSpan.FromSeconds(1),
             TokenLimit = config.LiteClient.Ratelimit,
-            TokensPerPeriod = config.LiteClient.Ratelimit
+            TokensPerPeriod = config.LiteClient.Ratelimit,
+            QueueLimit = 10000
         });
 
-        client = new TonSdk.Adnl.LiteClient.LiteClient(config.LiteClient.Host, config.LiteClient.Port, config.LiteClient.PublicKey);
+        client = new TonSdk.Adnl.LiteClient.LiteClient(config.LiteClient.Host, config.LiteClient.Port,
+            config.LiteClient.PublicKey);
 
         logger.LogInformation("LiteClient configured for {Host}:{Port} with {RPS} RPS",
             config.LiteClient.Host, config.LiteClient.Port, config.LiteClient.Ratelimit);
@@ -46,7 +48,8 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
         {
             try
             {
-                logger.LogInformation("Connecting to LiteClient (attempt {Attempt}/{MaxRetries})...", attempt, maxRetries);
+                logger.LogInformation("Connecting to LiteClient (attempt {Attempt}/{MaxRetries})...", attempt,
+                    maxRetries);
 
                 using CancellationTokenSource cts = new(TimeSpan.FromSeconds(timeoutSeconds));
                 await client.Connect(cts.Token);
@@ -56,19 +59,22 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
             }
             catch (TimeoutException ex)
             {
-                logger.LogWarning(ex, "LiteClient connection timeout on attempt {Attempt}/{MaxRetries}", attempt, maxRetries);
+                logger.LogWarning(ex, "LiteClient connection timeout on attempt {Attempt}/{MaxRetries}", attempt,
+                    maxRetries);
                 if (attempt == maxRetries)
                     throw new Exception($"Failed to connect to LiteClient after {maxRetries} attempts", ex);
             }
             catch (OperationCanceledException ex)
             {
-                logger.LogWarning(ex, "LiteClient connection timeout on attempt {Attempt}/{MaxRetries}", attempt, maxRetries);
+                logger.LogWarning(ex, "LiteClient connection timeout on attempt {Attempt}/{MaxRetries}", attempt,
+                    maxRetries);
                 if (attempt == maxRetries)
                     throw new Exception($"Failed to connect to LiteClient after {maxRetries} attempts", ex);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "LiteClient connection error on attempt {Attempt}/{MaxRetries}", attempt, maxRetries);
+                logger.LogError(ex, "LiteClient connection error on attempt {Attempt}/{MaxRetries}", attempt,
+                    maxRetries);
                 if (attempt == maxRetries)
                     throw;
             }
@@ -76,23 +82,6 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
             int delaySeconds = attempt * 2;
             logger.LogInformation("Retrying in {Delay} seconds...", delaySeconds);
             await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
-        }
-    }
-
-    async Task<T> ExecuteAsync<T>(Func<TonSdk.Adnl.LiteClient.LiteClient, Task<T>> operation)
-    {
-        using RateLimitLease lease = await rateLimiter.AcquireAsync();
-        if (!lease.IsAcquired)
-            throw new InvalidOperationException("Failed to acquire rate limit token");
-
-        using CancellationTokenSource cts = new(TimeSpan.FromSeconds(30));
-        try
-        {
-            return await operation(client).WaitAsync(cts.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            throw new TimeoutException("LiteClient operation timed out after 30 seconds");
         }
     }
 
@@ -113,9 +102,27 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
         return blockHeader?.BlockId;
     }
 
-    public async Task<ListBlockTransactionsResult> GetBlockTransactionsAsync(BlockIdExtended blockId, uint count = 10000)
+    public async Task<ListBlockTransactionsResult> GetBlockTransactionsAsync(BlockIdExtended blockId,
+        uint count = 10000)
     {
         return await ExecuteAsync(liteClient => liteClient.ListBlockTransactions(blockId, count));
+    }
+
+    async Task<T> ExecuteAsync<T>(Func<TonSdk.Adnl.LiteClient.LiteClient, Task<T>> operation)
+    {
+        using RateLimitLease lease = await rateLimiter.AcquireAsync(permitCount: 1);
+        if (!lease.IsAcquired)
+            throw new InvalidOperationException("Failed to acquire rate limit token - queue full");
+
+        using CancellationTokenSource cts = new(TimeSpan.FromSeconds(30));
+        try
+        {
+            return await operation(client).WaitAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            throw new TimeoutException("LiteClient operation timed out after 30 seconds");
+        }
     }
 
     BlockIdExtended[] DeserializeShardsInformationResult(byte[] data)
@@ -187,4 +194,3 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
         }
     }
 }
-

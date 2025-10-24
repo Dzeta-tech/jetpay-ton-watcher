@@ -8,4 +8,3 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<TrackedAddress> TrackedAddresses { get; set; } = null!;
     public DbSet<ShardBlock> ShardBlocks { get; set; } = null!;
 }
-

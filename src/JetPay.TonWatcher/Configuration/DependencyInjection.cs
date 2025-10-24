@@ -1,6 +1,5 @@
 using System.Reflection;
 using System.Text.Json.Serialization;
-using BloomFilter;
 using Dzeta.Configuration;
 using JetPay.TonWatcher.Application.Interfaces;
 using JetPay.TonWatcher.Infrastructure.BackgroundServices;

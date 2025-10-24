@@ -18,19 +18,13 @@ public class TrackedAddressesController(IMediator mediator) : ControllerBase
     [HttpPost("add/{address}")]
     public async Task<IActionResult> AddTrackedAddress(string address)
     {
-        if (string.IsNullOrEmpty(address))
-        {
-            return BadRequest(ApiResponse.FailureResult("Address is required"));
-        }
+        if (string.IsNullOrEmpty(address)) return BadRequest(ApiResponse.FailureResult("Address is required"));
 
         AddTrackedAddressResult result = await mediator.Send(new AddTrackedAddressCommand { Address = address });
 
         if (!result.Success)
-        {
             return BadRequest(ApiResponse.FailureResult(result.ErrorMessage ?? "Failed to add address"));
-        }
 
         return Ok(ApiResponse<Guid>.SuccessResult(result.AddressId!.Value));
     }
 }
-

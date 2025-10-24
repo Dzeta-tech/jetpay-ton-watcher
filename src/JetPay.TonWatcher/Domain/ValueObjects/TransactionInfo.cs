@@ -8,4 +8,3 @@ public record TransactionInfo
     public required byte[] AccountHash { get; init; }
     public required int Workchain { get; init; }
 }
-

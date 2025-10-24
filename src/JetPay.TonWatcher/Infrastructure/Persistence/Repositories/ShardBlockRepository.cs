@@ -12,7 +12,8 @@ public class ShardBlockRepository(ApplicationDbContext dbContext) : IShardBlockR
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
     }
 
-    public async Task<List<ShardBlock>> GetUnprocessedAsync(int limit = 100, CancellationToken cancellationToken = default)
+    public async Task<List<ShardBlock>> GetUnprocessedAsync(int limit = 100,
+        CancellationToken cancellationToken = default)
     {
         return await dbContext.ShardBlocks
             .Where(x => !x.IsProcessed)
@@ -44,4 +45,3 @@ public class ShardBlockRepository(ApplicationDbContext dbContext) : IShardBlockR
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 }
-

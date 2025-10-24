@@ -5,13 +5,17 @@ namespace JetPay.TonWatcher.Domain.Entities;
 
 public class TrackedAddress
 {
+    TrackedAddress()
+    {
+    }
+
     [Key]
     [DatabaseGenerated(DatabaseGeneratedOption.None)]
     public Guid Id { get; private set; }
 
     public int Workchain { get; private set; }
 
-    [Length(32, 32)] 
+    [Length(32, 32)]
     [MinLength(32)]
     [MaxLength(32)]
     public byte[] Account { get; private set; } = null!;
@@ -19,8 +23,6 @@ public class TrackedAddress
     public bool IsTrackingActive { get; private set; }
 
     public DateTime CreatedAt { get; private set; }
-
-    private TrackedAddress() { }
 
     public static TrackedAddress Create(int workchain, byte[] account)
     {
@@ -44,4 +46,3 @@ public class TrackedAddress
         IsTrackingActive = true;
     }
 }
-

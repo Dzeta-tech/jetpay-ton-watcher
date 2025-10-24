@@ -11,4 +11,3 @@ public record SyncShardBlocksResult
     public bool Success { get; init; }
     public int BlocksAdded { get; init; }
 }
-

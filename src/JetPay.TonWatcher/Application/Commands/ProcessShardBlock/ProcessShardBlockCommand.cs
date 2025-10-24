@@ -14,4 +14,3 @@ public record ProcessShardBlockResult
     public int TransactionsFound { get; init; }
     public List<TransactionInfo> Transactions { get; init; } = new();
 }
-

@@ -10,4 +10,3 @@ public interface ILiteClientService
     Task<BlockIdExtended?> LookupBlockAsync(int workchain, long shard, long seqno);
     Task<ListBlockTransactionsResult> GetBlockTransactionsAsync(BlockIdExtended blockId, uint count = 10000);
 }
-

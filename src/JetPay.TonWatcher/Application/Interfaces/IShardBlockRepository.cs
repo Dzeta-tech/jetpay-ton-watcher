@@ -10,4 +10,3 @@ public interface IShardBlockRepository
     Task AddAsync(ShardBlock shardBlock, CancellationToken cancellationToken = default);
     Task UpdateAsync(ShardBlock shardBlock, CancellationToken cancellationToken = default);
 }
-

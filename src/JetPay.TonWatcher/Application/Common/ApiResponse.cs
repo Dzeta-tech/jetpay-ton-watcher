@@ -44,4 +44,3 @@ public record ApiResponse
         };
     }
 }
-

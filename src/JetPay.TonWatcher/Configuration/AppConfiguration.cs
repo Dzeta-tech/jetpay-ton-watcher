@@ -7,8 +7,8 @@ public class AppConfiguration : BaseConfiguration
 {
     [Required] public DatabaseConnectionConfiguration Database { get; set; } = null!;
     [Required] public LiteClientConfiguration LiteClient { get; set; } = null!;
-    public RabbitMqConfiguration RabbitMq { get; set; } = new RabbitMqConfiguration();
-    public TelegramConfiguration Telegram { get; set; } = new TelegramConfiguration();
+    public RabbitMqConfiguration RabbitMq { get; set; } = new();
+    public TelegramConfiguration Telegram { get; set; } = new();
 }
 
 public class LiteClientConfiguration : BaseConfiguration

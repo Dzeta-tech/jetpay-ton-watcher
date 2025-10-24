@@ -8,10 +8,10 @@ namespace JetPay.TonWatcher.Infrastructure.Messaging;
 
 public class RabbitMqPublisher : IMessagePublisher, IAsyncDisposable
 {
-    readonly IConnection? connection;
     readonly IChannel? channel;
-    readonly ILogger<RabbitMqPublisher> logger;
+    readonly IConnection? connection;
     readonly string exchangeName;
+    readonly ILogger<RabbitMqPublisher> logger;
 
     public RabbitMqPublisher(AppConfiguration config, ILogger<RabbitMqPublisher> logger)
     {
@@ -38,7 +38,7 @@ public class RabbitMqPublisher : IMessagePublisher, IAsyncDisposable
             connection = factory.CreateConnectionAsync().GetAwaiter().GetResult();
             channel = connection.CreateChannelAsync().GetAwaiter().GetResult();
 
-            channel.ExchangeDeclareAsync(exchangeName, ExchangeType.Fanout, durable: true).GetAwaiter().GetResult();
+            channel.ExchangeDeclareAsync(exchangeName, ExchangeType.Fanout, true).GetAwaiter().GetResult();
 
             logger.LogInformation("RabbitMQ publisher initialized for exchange {Exchange}", exchangeName);
         }
@@ -46,6 +46,15 @@ public class RabbitMqPublisher : IMessagePublisher, IAsyncDisposable
         {
             logger.LogError(ex, "Failed to initialize RabbitMQ publisher");
         }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (channel != null)
+            await channel.CloseAsync();
+
+        if (connection != null)
+            await connection.CloseAsync();
     }
 
     public async Task PublishAsync<T>(T message, CancellationToken cancellationToken = default) where T : class
@@ -62,10 +71,10 @@ public class RabbitMqPublisher : IMessagePublisher, IAsyncDisposable
             byte[] body = Encoding.UTF8.GetBytes(json);
 
             await channel.BasicPublishAsync(
-                exchange: exchangeName,
-                routingKey: string.Empty,
-                body: body,
-                cancellationToken: cancellationToken);
+                exchangeName,
+                string.Empty,
+                body,
+                cancellationToken);
 
             logger.LogDebug("Published message to RabbitMQ: {MessageType}", typeof(T).Name);
         }
@@ -74,14 +83,4 @@ public class RabbitMqPublisher : IMessagePublisher, IAsyncDisposable
             logger.LogError(ex, "Error publishing message to RabbitMQ");
         }
     }
-
-    public async ValueTask DisposeAsync()
-    {
-        if (channel != null)
-            await channel.CloseAsync();
-        
-        if (connection != null)
-            await connection.CloseAsync();
-    }
 }
-

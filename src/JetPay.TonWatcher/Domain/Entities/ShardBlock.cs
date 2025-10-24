@@ -7,6 +7,10 @@ namespace JetPay.TonWatcher.Domain.Entities;
 [Index(nameof(Seqno))]
 public class ShardBlock
 {
+    ShardBlock()
+    {
+    }
+
     [Key]
     [DatabaseGenerated(DatabaseGeneratedOption.None)]
     public Guid Id { get; private set; }
@@ -20,8 +24,6 @@ public class ShardBlock
     public bool IsProcessed { get; private set; }
 
     public DateTime? ProcessedAt { get; private set; }
-
-    private ShardBlock() { }
 
     public static ShardBlock Create(int workchain, long shard, long seqno)
     {
@@ -41,4 +43,3 @@ public class ShardBlock
         ProcessedAt = DateTime.UtcNow;
     }
 }
-

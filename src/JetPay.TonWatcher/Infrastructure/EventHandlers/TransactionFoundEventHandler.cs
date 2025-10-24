@@ -18,4 +18,3 @@ public class TransactionFoundEventHandler(
         logger.LogInformation("Published transaction event to RabbitMQ for {Address}", notification.Address);
     }
 }
-

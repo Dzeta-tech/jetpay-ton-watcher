@@ -13,4 +13,3 @@ public record AddTrackedAddressResult
     public string? ErrorMessage { get; init; }
     public Guid? AddressId { get; init; }
 }
-

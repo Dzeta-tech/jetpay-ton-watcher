@@ -19,7 +19,8 @@ public class BlockProcessorService(
             {
                 using IServiceScope scope = scopeFactory.CreateScope();
                 IMediator mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
-                IShardBlockRepository shardBlockRepository = scope.ServiceProvider.GetRequiredService<IShardBlockRepository>();
+                IShardBlockRepository shardBlockRepository =
+                    scope.ServiceProvider.GetRequiredService<IShardBlockRepository>();
 
                 List<ShardBlock> unprocessedBlocks = await shardBlockRepository.GetUnprocessedAsync(100, stoppingToken);
 
@@ -32,14 +33,12 @@ public class BlockProcessorService(
                 foreach (ShardBlock block in unprocessedBlocks)
                 {
                     ProcessShardBlockResult result = await mediator.Send(
-                        new ProcessShardBlockCommand { ShardBlockId = block.Id }, 
+                        new ProcessShardBlockCommand { ShardBlockId = block.Id },
                         stoppingToken);
 
                     if (result.Success && result.TransactionsFound > 0)
-                    {
                         logger.LogInformation("Processed block {Shard}:{Seqno}, found {Count} transactions",
                             block.Shard, block.Seqno, result.TransactionsFound);
-                    }
                 }
             }
             catch (Exception ex)
@@ -51,4 +50,3 @@ public class BlockProcessorService(
         }
     }
 }
-

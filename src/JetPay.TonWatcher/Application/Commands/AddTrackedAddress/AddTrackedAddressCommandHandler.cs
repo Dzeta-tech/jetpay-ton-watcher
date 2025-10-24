@@ -12,12 +12,13 @@ public class AddTrackedAddressCommandHandler(
     ILogger<AddTrackedAddressCommandHandler> logger)
     : IRequestHandler<AddTrackedAddressCommand, AddTrackedAddressResult>
 {
-    public async Task<AddTrackedAddressResult> Handle(AddTrackedAddressCommand request, CancellationToken cancellationToken)
+    public async Task<AddTrackedAddressResult> Handle(AddTrackedAddressCommand request,
+        CancellationToken cancellationToken)
     {
         try
         {
             Address parsedAddress = new(request.Address);
-            
+
             TrackedAddress trackedAddress = TrackedAddress.Create(
                 parsedAddress.GetWorkchain(),
                 parsedAddress.GetHash());
@@ -25,7 +26,7 @@ public class AddTrackedAddressCommandHandler(
             await trackedAddressRepository.AddAsync(trackedAddress, cancellationToken);
             await bloomFilter.AddAsync(parsedAddress.GetHash());
 
-            logger.LogInformation("Added tracked address {Address} with ID {Id}", 
+            logger.LogInformation("Added tracked address {Address} with ID {Id}",
                 request.Address, trackedAddress.Id);
 
             return new AddTrackedAddressResult
@@ -45,4 +46,3 @@ public class AddTrackedAddressCommandHandler(
         }
     }
 }
-

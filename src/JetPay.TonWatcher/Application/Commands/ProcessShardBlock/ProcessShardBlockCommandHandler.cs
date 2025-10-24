@@ -19,7 +19,8 @@ public class ProcessShardBlockCommandHandler(
     ILogger<ProcessShardBlockCommandHandler> logger)
     : IRequestHandler<ProcessShardBlockCommand, ProcessShardBlockResult>
 {
-    public async Task<ProcessShardBlockResult> Handle(ProcessShardBlockCommand request, CancellationToken cancellationToken)
+    public async Task<ProcessShardBlockResult> Handle(ProcessShardBlockCommand request,
+        CancellationToken cancellationToken)
     {
         ShardBlock? shardBlock = await shardBlockRepository.GetByIdAsync(request.ShardBlockId, cancellationToken);
         if (shardBlock == null)
@@ -28,28 +29,25 @@ public class ProcessShardBlockCommandHandler(
             return new ProcessShardBlockResult { Success = false };
         }
 
-        if (shardBlock.IsProcessed)
-        {
-            return new ProcessShardBlockResult { Success = true, TransactionsFound = 0 };
-        }
+        if (shardBlock.IsProcessed) return new ProcessShardBlockResult { Success = true, TransactionsFound = 0 };
 
         List<TransactionInfo> foundTransactions = new();
 
         try
         {
             BlockIdExtended? blockId = await liteClientService.LookupBlockAsync(
-                shardBlock.Workchain, 
-                shardBlock.Shard, 
+                shardBlock.Workchain,
+                shardBlock.Shard,
                 shardBlock.Seqno);
 
             if (blockId == null)
             {
-                logger.LogWarning("Block {Shard}:{Seqno} not found, will retry later", 
+                logger.LogWarning("Block {Shard}:{Seqno} not found, will retry later",
                     shardBlock.Shard, shardBlock.Seqno);
                 return new ProcessShardBlockResult { Success = false };
             }
 
-            ListBlockTransactionsResult transactionsResult = 
+            ListBlockTransactionsResult transactionsResult =
                 await liteClientService.GetBlockTransactionsAsync(blockId, 100000);
 
             if (transactionsResult.TransactionIds == null || transactionsResult.TransactionIds.Length == 0)
@@ -65,7 +63,7 @@ public class ProcessShardBlockCommandHandler(
                     continue;
 
                 string addressStr = new Address(shardBlock.Workchain, tx.Account).ToString();
-                
+
                 TrackedAddress? trackedAddress = await trackedAddressRepository
                     .GetByAccountAsync(shardBlock.Workchain, tx.Account, cancellationToken);
 
@@ -92,7 +90,7 @@ public class ProcessShardBlockCommandHandler(
                     DetectedAt = DateTime.UtcNow
                 }, cancellationToken);
 
-                logger.LogInformation("Transaction found for {Address}, TxHash: {Hash}, Lt: {Lt}", 
+                logger.LogInformation("Transaction found for {Address}, TxHash: {Hash}, Lt: {Lt}",
                     addressStr, txInfo.TxHash, txInfo.LogicalTime);
             }
 
@@ -108,20 +106,15 @@ public class ProcessShardBlockCommandHandler(
         }
         catch (TimeoutException ex)
         {
-            logger.LogWarning(ex, "Timeout processing shard {Shard}:{Seqno}, will retry later", 
+            logger.LogWarning(ex, "Timeout processing shard {Shard}:{Seqno}, will retry later",
                 shardBlock.Shard, shardBlock.Seqno);
             return new ProcessShardBlockResult { Success = false };
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error processing shard {Shard}:{Seqno}, marking as processed to avoid infinite loop",
+            logger.LogError(ex, "Error processing shard {Shard}:{Seqno}, will retry later",
                 shardBlock.Shard, shardBlock.Seqno);
-            
-            shardBlock.MarkAsProcessed();
-            await shardBlockRepository.UpdateAsync(shardBlock, cancellationToken);
-            
             return new ProcessShardBlockResult { Success = false };
         }
     }
 }
-
