@@ -12,11 +12,12 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
     readonly TonSdk.Adnl.LiteClient.LiteClient client;
     readonly ILogger<LiteClientService> logger;
     readonly TokenBucketRateLimiter rateLimiter;
-    readonly SemaphoreSlim clientLock = new(1, 1);
+    readonly IDistributedLock distributedLock;
 
-    public LiteClientService(AppConfiguration config, ILogger<LiteClientService> logger)
+    public LiteClientService(AppConfiguration config, IDistributedLock distributedLock, ILogger<LiteClientService> logger)
     {
         this.logger = logger;
+        this.distributedLock = distributedLock;
 
         rateLimiter = new TokenBucketRateLimiter(new TokenBucketRateLimiterOptions
         {
@@ -38,7 +39,6 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
     {
         client.Disconnect();
         await rateLimiter.DisposeAsync();
-        clientLock.Dispose();
     }
 
     public async Task InitializeAsync()
@@ -77,15 +77,12 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
         if (!lease.IsAcquired)
             throw new InvalidOperationException("Failed to acquire rate limit token - queue full");
 
-        await clientLock.WaitAsync();
-        try
-        {
-            return await operation(client);
-        }
-        finally
-        {
-            clientLock.Release();
-        }
+        // Acquire distributed lock across all services
+        using IDisposable? lockHandle = await distributedLock.AcquireLockAsync("lite-client", TimeSpan.FromSeconds(30));
+        if (lockHandle == null)
+            throw new InvalidOperationException("Failed to acquire distributed lock for lite client");
+
+        return await operation(client);
     }
 
     BlockIdExtended[] DeserializeShardsInformationResult(byte[] data)
