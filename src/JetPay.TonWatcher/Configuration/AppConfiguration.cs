@@ -7,7 +7,7 @@ public class AppConfiguration : BaseConfiguration
 {
     [Required] public DatabaseConnectionConfiguration Database { get; set; } = null!;
     [Required] public LiteClientConfiguration LiteClient { get; set; } = null!;
-    public RabbitMqConfiguration RabbitMq { get; set; } = new();
+    [Required] public RedisConfiguration Redis { get; set; } = null!;
     public TelegramConfiguration Telegram { get; set; } = new();
 }
 
@@ -19,15 +19,12 @@ public class LiteClientConfiguration : BaseConfiguration
     public int Ratelimit { get; set; } = 10;
 }
 
-public class RabbitMqConfiguration : BaseConfiguration
+public class RedisConfiguration : BaseConfiguration
 {
-    public bool Enabled { get; set; } = false;
-    public string Host { get; set; } = "localhost";
-    public int Port { get; set; } = 5672;
-    public string UserName { get; set; } = "guest";
-    public string Password { get; set; } = "guest";
-    public string VirtualHost { get; set; } = "/";
-    public string ExchangeName { get; set; } = "ton-transactions";
+    [Required] public string Host { get; set; } = string.Empty;
+    [Required] public string Port { get; set; } = string.Empty;
+    public string? User { get; set; }
+    public string? Password { get; set; }
 }
 
 public class TelegramConfiguration : BaseConfiguration

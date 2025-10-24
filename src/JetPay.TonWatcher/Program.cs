@@ -8,6 +8,7 @@ try
     builder.UseLogging();
     builder.UseConfiguration();
     builder.UseDatabase();
+    builder.UseRedis();
     builder.UseControllers();
     builder.UseServices();
 

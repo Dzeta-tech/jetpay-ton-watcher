@@ -115,14 +115,11 @@ LITE_CLIENT_PORT=your-liteclient-port
 LITE_CLIENT_PUBLIC_KEY=your-public-key
 LITE_CLIENT_RATELIMIT=10
 
-# RabbitMQ (Optional - disable if not needed)
-RABBIT_MQ_ENABLED=true
-RABBIT_MQ_HOST=localhost
-RABBIT_MQ_PORT=5672
-RABBIT_MQ_USER_NAME=guest
-RABBIT_MQ_PASSWORD=guest
-RABBIT_MQ_VIRTUAL_HOST=/
-RABBIT_MQ_EXCHANGE_NAME=ton-transactions
+# Redis (Required for streaming transactions)
+REDIS__HOST=localhost
+REDIS__PORT=6379
+REDIS__USER=
+REDIS__PASSWORD=
 
 # Telegram (Optional - disable if not needed)
 TELEGRAM_ENABLED=false
@@ -141,5 +138,5 @@ Built with:
 ### Project Structure
 - `Domain/`: Business entities, events, and value objects
 - `Application/`: Commands, queries, and business logic handlers
-- `Infrastructure/`: Database, LiteClient, RabbitMQ, event handlers
+- `Infrastructure/`: Database, LiteClient, Redis Streams, event handlers
 - `Presentation/`: API controllers

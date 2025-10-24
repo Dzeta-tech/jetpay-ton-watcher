@@ -1,0 +1,2 @@
+global using RedisDatabase = StackExchange.Redis.IDatabase;
+

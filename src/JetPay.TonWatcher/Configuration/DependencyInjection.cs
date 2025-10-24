@@ -10,6 +10,7 @@ using JetPay.TonWatcher.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Serilog.Events;
+using StackExchange.Redis;
 using Telegram.Bot;
 
 namespace JetPay.TonWatcher.Configuration;
@@ -47,6 +48,30 @@ public static class DependencyInjection
         });
     }
 
+    public static void UseRedis(this WebApplicationBuilder builder)
+    {
+        builder.Services.AddSingleton<IConnectionMultiplexer>(serviceProvider =>
+        {
+            AppConfiguration configuration = serviceProvider.GetRequiredService<AppConfiguration>();
+
+            string redisOptions = $"{configuration.Redis.Host}:{configuration.Redis.Port}";
+
+            if (!string.IsNullOrEmpty(configuration.Redis.User))
+                redisOptions += ",user=" + configuration.Redis.User;
+
+            if (!string.IsNullOrEmpty(configuration.Redis.Password))
+                redisOptions += ",password=" + configuration.Redis.Password;
+
+            return ConnectionMultiplexer.Connect(redisOptions);
+        });
+
+        builder.Services.AddScoped<RedisDatabase>(serviceProvider =>
+        {
+            IConnectionMultiplexer redis = serviceProvider.GetRequiredService<IConnectionMultiplexer>();
+            return redis.GetDatabase();
+        });
+    }
+
     public static void UseControllers(this WebApplicationBuilder builder)
     {
         builder.Services.AddControllers().AddJsonOptions(opts =>
@@ -67,7 +92,7 @@ public static class DependencyInjection
 
         // Infrastructure Services
         builder.Services.AddSingleton<ILiteClientService, LiteClientService>();
-        builder.Services.AddSingleton<IMessagePublisher, RabbitMqPublisher>();
+        builder.Services.AddScoped<IMessagePublisher, RedisStreamPublisher>();
 
         // Bloom Filter
         builder.Services.AddBloomFilter(setupAction => { setupAction.UseInMemory(); });
