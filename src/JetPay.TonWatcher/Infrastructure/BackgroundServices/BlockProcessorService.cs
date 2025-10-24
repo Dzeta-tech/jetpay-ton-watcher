@@ -7,7 +7,8 @@ namespace JetPay.TonWatcher.Infrastructure.BackgroundServices;
 
 public class BlockProcessorService(
     ILogger<BlockProcessorService> logger,
-    IServiceScopeFactory scopeFactory) : BackgroundService
+    IServiceScopeFactory scopeFactory,
+    ILiteClientService liteClientService) : BackgroundService
 {
     readonly TimeSpan syncInterval = TimeSpan.FromMilliseconds(100);
 
@@ -17,6 +18,12 @@ public class BlockProcessorService(
         {
             try
             {
+                if (!liteClientService.IsConnected())
+                {
+                    await Task.Delay(syncInterval, stoppingToken);
+                    continue;
+                }
+
                 using IServiceScope scope = scopeFactory.CreateScope();
                 IMediator mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
                 IShardBlockRepository shardBlockRepository =

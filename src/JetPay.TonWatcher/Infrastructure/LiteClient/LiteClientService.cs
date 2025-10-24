@@ -12,6 +12,7 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
     readonly TonSdk.Adnl.LiteClient.LiteClient client;
     readonly ILogger<LiteClientService> logger;
     readonly TokenBucketRateLimiter rateLimiter;
+    bool isConnected;
 
     public LiteClientService(AppConfiguration config, ILogger<LiteClientService> logger)
     {
@@ -54,6 +55,7 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
                 using CancellationTokenSource cts = new(TimeSpan.FromSeconds(timeoutSeconds));
                 await client.Connect(cts.Token);
 
+                isConnected = true;
                 logger.LogInformation("LiteClient connected successfully");
                 return;
             }
@@ -107,6 +109,8 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
     {
         return await ExecuteAsync(liteClient => liteClient.ListBlockTransactions(blockId, count));
     }
+
+    public bool IsConnected() => isConnected;
 
     async Task<T> ExecuteAsync<T>(Func<TonSdk.Adnl.LiteClient.LiteClient, Task<T>> operation)
     {
