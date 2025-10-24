@@ -12,6 +12,7 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
     readonly TonSdk.Adnl.LiteClient.LiteClient client;
     readonly ILogger<LiteClientService> logger;
     readonly TokenBucketRateLimiter rateLimiter;
+    readonly SemaphoreSlim clientLock = new(1, 1);
     bool isConnected;
 
     public LiteClientService(AppConfiguration config, ILogger<LiteClientService> logger)
@@ -38,6 +39,7 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
     {
         client.Disconnect();
         await rateLimiter.DisposeAsync();
+        clientLock.Dispose();
     }
 
     public async Task InitializeAsync()
@@ -118,26 +120,34 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
         if (!lease.IsAcquired)
             throw new InvalidOperationException("Failed to acquire rate limit token - queue full");
 
-        using CancellationTokenSource cts = new(TimeSpan.FromSeconds(30));
+        await clientLock.WaitAsync();
         try
         {
-            return await operation(client).WaitAsync(cts.Token);
+            using CancellationTokenSource cts = new(TimeSpan.FromSeconds(30));
+            try
+            {
+                return await operation(client).WaitAsync(cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                throw new TimeoutException("LiteClient operation timed out after 30 seconds");
+            }
+            catch (Exception ex) when (ex.Message.Contains("Connection to lite server must be init"))
+            {
+                isConnected = false;
+                logger.LogError(ex, "LiteClient connection lost, marking as disconnected");
+                throw;
+            }
+            catch (IndexOutOfRangeException ex)
+            {
+                isConnected = false;
+                logger.LogError(ex, "LiteClient encryption error, connection corrupted, marking as disconnected");
+                throw;
+            }
         }
-        catch (OperationCanceledException)
+        finally
         {
-            throw new TimeoutException("LiteClient operation timed out after 30 seconds");
-        }
-        catch (Exception ex) when (ex.Message.Contains("Connection to lite server must be init"))
-        {
-            isConnected = false;
-            logger.LogError(ex, "LiteClient connection lost, marking as disconnected");
-            throw;
-        }
-        catch (IndexOutOfRangeException ex)
-        {
-            isConnected = false;
-            logger.LogError(ex, "LiteClient encryption error, connection corrupted, marking as disconnected");
-            throw;
+            clientLock.Release();
         }
     }
 
