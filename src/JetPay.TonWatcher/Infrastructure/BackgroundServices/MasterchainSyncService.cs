@@ -19,8 +19,18 @@ public class MasterchainSyncService(
             {
                 if (!liteClientService.IsConnected())
                 {
-                    await Task.Delay(syncInterval, stoppingToken);
-                    continue;
+                    logger.LogWarning("LiteClient not connected, attempting reconnection...");
+                    try
+                    {
+                        await liteClientService.InitializeAsync();
+                        logger.LogInformation("LiteClient reconnected successfully");
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, "Failed to reconnect LiteClient, will retry");
+                        await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+                        continue;
+                    }
                 }
 
                 using IServiceScope scope = scopeFactory.CreateScope();

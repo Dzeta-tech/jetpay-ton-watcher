@@ -127,6 +127,18 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
         {
             throw new TimeoutException("LiteClient operation timed out after 30 seconds");
         }
+        catch (Exception ex) when (ex.Message.Contains("Connection to lite server must be init"))
+        {
+            isConnected = false;
+            logger.LogError(ex, "LiteClient connection lost, marking as disconnected");
+            throw;
+        }
+        catch (IndexOutOfRangeException ex)
+        {
+            isConnected = false;
+            logger.LogError(ex, "LiteClient encryption error, connection corrupted, marking as disconnected");
+            throw;
+        }
     }
 
     BlockIdExtended[] DeserializeShardsInformationResult(byte[] data)
