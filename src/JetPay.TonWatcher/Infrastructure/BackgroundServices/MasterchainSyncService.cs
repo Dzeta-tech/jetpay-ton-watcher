@@ -1,13 +1,11 @@
 using JetPay.TonWatcher.Application.Commands.SyncShardBlocks;
-using JetPay.TonWatcher.Application.Interfaces;
 using MediatR;
 
 namespace JetPay.TonWatcher.Infrastructure.BackgroundServices;
 
 public class MasterchainSyncService(
     ILogger<MasterchainSyncService> logger,
-    IServiceScopeFactory scopeFactory,
-    ILiteClientService liteClientService) : BackgroundService
+    IServiceScopeFactory scopeFactory) : BackgroundService
 {
     readonly TimeSpan syncInterval = TimeSpan.FromMilliseconds(100);
 
@@ -17,22 +15,6 @@ public class MasterchainSyncService(
         {
             try
             {
-                if (!liteClientService.IsConnected())
-                {
-                    logger.LogWarning("LiteClient not connected, attempting reconnection...");
-                    try
-                    {
-                        await liteClientService.InitializeAsync();
-                        logger.LogInformation("LiteClient reconnected successfully");
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogError(ex, "Failed to reconnect LiteClient, will retry");
-                        await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
-                        continue;
-                    }
-                }
-
                 using IServiceScope scope = scopeFactory.CreateScope();
                 IMediator mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
 

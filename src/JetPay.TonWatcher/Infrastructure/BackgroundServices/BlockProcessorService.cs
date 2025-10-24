@@ -7,8 +7,7 @@ namespace JetPay.TonWatcher.Infrastructure.BackgroundServices;
 
 public class BlockProcessorService(
     ILogger<BlockProcessorService> logger,
-    IServiceScopeFactory scopeFactory,
-    ILiteClientService liteClientService) : BackgroundService
+    IServiceScopeFactory scopeFactory) : BackgroundService
 {
     readonly TimeSpan syncInterval = TimeSpan.FromMilliseconds(100);
 
@@ -18,12 +17,6 @@ public class BlockProcessorService(
         {
             try
             {
-                if (!liteClientService.IsConnected())
-                {
-                    await Task.Delay(syncInterval, stoppingToken);
-                    continue;
-                }
-
                 using IServiceScope scope = scopeFactory.CreateScope();
                 IMediator mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
                 IShardBlockRepository shardBlockRepository =
@@ -37,15 +30,24 @@ public class BlockProcessorService(
                     continue;
                 }
 
+                int totalBlocks = unprocessedBlocks.Count;
+                int processedCount = 0;
+
                 foreach (ShardBlock block in unprocessedBlocks)
                 {
                     ProcessShardBlockResult result = await mediator.Send(
                         new ProcessShardBlockCommand { ShardBlockId = block.Id },
                         stoppingToken);
 
+                    processedCount++;
+
                     if (result.Success && result.TransactionsFound > 0)
                         logger.LogInformation("Processed block {Shard}:{Seqno}, found {Count} transactions",
                             block.Shard, block.Seqno, result.TransactionsFound);
+
+                    if (totalBlocks > 100 && processedCount % 100 == 0)
+                        logger.LogInformation("Progress: {Processed}/{Total} blocks processed, {Remaining} remaining",
+                            processedCount, totalBlocks, totalBlocks - processedCount);
                 }
             }
             catch (Exception ex)

@@ -13,7 +13,6 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
     readonly ILogger<LiteClientService> logger;
     readonly TokenBucketRateLimiter rateLimiter;
     readonly SemaphoreSlim clientLock = new(1, 1);
-    bool isConnected;
 
     public LiteClientService(AppConfiguration config, ILogger<LiteClientService> logger)
     {
@@ -44,49 +43,9 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
 
     public async Task InitializeAsync()
     {
-        const int maxRetries = 3;
-        const int timeoutSeconds = 5;
-
-        for (int attempt = 1; attempt <= maxRetries; attempt++)
-        {
-            try
-            {
-                logger.LogInformation("Connecting to LiteClient (attempt {Attempt}/{MaxRetries})...", attempt,
-                    maxRetries);
-
-                using CancellationTokenSource cts = new(TimeSpan.FromSeconds(timeoutSeconds));
-                await client.Connect(cts.Token);
-
-                isConnected = true;
-                logger.LogInformation("LiteClient connected successfully");
-                return;
-            }
-            catch (TimeoutException ex)
-            {
-                logger.LogWarning(ex, "LiteClient connection timeout on attempt {Attempt}/{MaxRetries}", attempt,
-                    maxRetries);
-                if (attempt == maxRetries)
-                    throw new Exception($"Failed to connect to LiteClient after {maxRetries} attempts", ex);
-            }
-            catch (OperationCanceledException ex)
-            {
-                logger.LogWarning(ex, "LiteClient connection timeout on attempt {Attempt}/{MaxRetries}", attempt,
-                    maxRetries);
-                if (attempt == maxRetries)
-                    throw new Exception($"Failed to connect to LiteClient after {maxRetries} attempts", ex);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "LiteClient connection error on attempt {Attempt}/{MaxRetries}", attempt,
-                    maxRetries);
-                if (attempt == maxRetries)
-                    throw;
-            }
-
-            int delaySeconds = attempt * 2;
-            logger.LogInformation("Retrying in {Delay} seconds...", delaySeconds);
-            await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
-        }
+        logger.LogInformation("Connecting to LiteClient...");
+        await client.Connect();
+        logger.LogInformation("LiteClient connected successfully");
     }
 
     public async Task<MasterChainInfoExtended> GetMasterChainInfoAsync()
@@ -112,8 +71,6 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
         return await ExecuteAsync(liteClient => liteClient.ListBlockTransactions(blockId, count));
     }
 
-    public bool IsConnected() => isConnected;
-
     async Task<T> ExecuteAsync<T>(Func<TonSdk.Adnl.LiteClient.LiteClient, Task<T>> operation)
     {
         using RateLimitLease lease = await rateLimiter.AcquireAsync(permitCount: 1);
@@ -123,27 +80,7 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
         await clientLock.WaitAsync();
         try
         {
-            using CancellationTokenSource cts = new(TimeSpan.FromSeconds(30));
-            try
-            {
-                return await operation(client).WaitAsync(cts.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                throw new TimeoutException("LiteClient operation timed out after 30 seconds");
-            }
-            catch (Exception ex) when (ex.Message.Contains("Connection to lite server must be init"))
-            {
-                isConnected = false;
-                logger.LogError(ex, "LiteClient connection lost, marking as disconnected");
-                throw;
-            }
-            catch (IndexOutOfRangeException ex)
-            {
-                isConnected = false;
-                logger.LogError(ex, "LiteClient encryption error, connection corrupted, marking as disconnected");
-                throw;
-            }
+            return await operation(client);
         }
         finally
         {
