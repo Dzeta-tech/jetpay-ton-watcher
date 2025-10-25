@@ -109,19 +109,41 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
 
         try
         {
-            // Ensure we're connected before executing
+            // Ensure we're connected before executing (uses lock internally)
             await EnsureConnectedAsync();
             
-            // SDK is now thread-safe, no distributed lock needed
+            // SDK is thread-safe with proper locking on cipher state
             return await operation(client);
         }
-        catch (Exception ex) when (ex.Message.Contains("Connection to lite server must be init"))
+        catch (Exception ex) when (
+            ex.Message.Contains("Connection to lite server must be init") ||
+            ex is IndexOutOfRangeException) // Catch cipher state corruption during reconnection
         {
-            // Connection was lost, mark as not initialized and retry once
-            logger.LogWarning("LiteClient connection lost, attempting to reconnect...");
-            isInitialized = false;
+            // Connection was lost or cipher corrupted, need to fully reconnect
+            logger.LogWarning(ex, "LiteClient connection issue detected, reconnecting...");
             
-            await EnsureConnectedAsync();
+            // Must acquire connection lock to prevent concurrent reconnection attempts
+            await connectionLock.WaitAsync();
+            try
+            {
+                // Disconnect completely to reset cipher state
+                client.Disconnect();
+                isInitialized = false;
+                
+                // Small delay to ensure cleanup completes
+                await Task.Delay(100);
+                
+                // Reconnect with fresh cipher state
+                await client.Connect();
+                isInitialized = true;
+                logger.LogInformation("LiteClient reconnected successfully");
+            }
+            finally
+            {
+                connectionLock.Release();
+            }
+            
+            // Retry the operation once with the fresh connection
             return await operation(client);
         }
     }
