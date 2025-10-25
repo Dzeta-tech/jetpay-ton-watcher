@@ -13,13 +13,11 @@ public class TrackedAddressRepository(ApplicationDbContext dbContext) : ITracked
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
     }
 
-    public async Task<TrackedAddress?> GetByAccountAsync(int workchain, byte[] account,
-        CancellationToken cancellationToken = default)
+    public async Task<TrackedAddress?> GetByAddressAsync(Address address, CancellationToken cancellationToken = default)
     {
-        Address searchAddress = new(workchain, account);
         return await dbContext.TrackedAddresses
             .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Address == searchAddress, cancellationToken);
+            .FirstOrDefaultAsync(x => x.Address == address, cancellationToken);
     }
 
     public async Task<List<TrackedAddress>> GetActiveAsync(CancellationToken cancellationToken = default)

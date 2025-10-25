@@ -17,15 +17,13 @@ public class AddTrackedAddressCommandHandler(
     {
         try
         {
-            Address parsedAddress = new(request.Address);
-
-            TrackedAddress trackedAddress = TrackedAddress.Create(parsedAddress);
+            TrackedAddress trackedAddress = TrackedAddress.Create(request.Address);
 
             await trackedAddressRepository.AddAsync(trackedAddress, cancellationToken);
-            await bloomFilter.AddAsync(parsedAddress.Hash.ToArray());
+            await bloomFilter.AddAsync(request.Address.Hash.ToArray());
 
             logger.LogInformation("Added tracked address {Address} with ID {Id}",
-                request.Address, trackedAddress.Id);
+                request.Address.ToRaw(), trackedAddress.Id);
 
             return new AddTrackedAddressResult
             {
@@ -35,7 +33,7 @@ public class AddTrackedAddressCommandHandler(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error adding tracked address {Address}", request.Address);
+            logger.LogError(ex, "Error adding tracked address {Address}", request.Address.ToRaw());
             return new AddTrackedAddressResult
             {
                 Success = false,

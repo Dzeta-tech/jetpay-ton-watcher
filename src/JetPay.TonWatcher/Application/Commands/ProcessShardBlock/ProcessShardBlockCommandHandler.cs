@@ -63,17 +63,18 @@ public class ProcessShardBlockCommandHandler(
                     continue;
 
                 Address txAddress = new(shardBlock.Workchain, tx.Account);
-                string addressStr = txAddress.ToBase64(bounceable: false, testOnly: false, urlSafe: true);
 
                 TrackedAddress? trackedAddress = await trackedAddressRepository
-                    .GetByAccountAsync(shardBlock.Workchain, tx.Account, cancellationToken);
+                    .GetByAddressAsync(txAddress, cancellationToken);
 
                 if (trackedAddress is not { IsTrackingActive: true })
                     continue;
 
+                string addressRaw = txAddress.ToRaw(); // Convert to raw format only for output: "0:abc123..."
+
                 TransactionInfo txInfo = new()
                 {
-                    Address = addressStr,
+                    Address = addressRaw,
                     TxHash = Convert.ToBase64String(tx.Hash),
                     LogicalTime = (ulong)tx.Lt,
                     AccountHash = tx.Account,
@@ -82,17 +83,17 @@ public class ProcessShardBlockCommandHandler(
 
                 foundTransactions.Add(txInfo);
 
-                // Publish domain event
+                // Publish domain event with raw address format
                 await mediator.Publish(new TransactionFoundEvent
                 {
-                    Address = addressStr,
+                    Address = addressRaw,
                     TxHash = txInfo.TxHash,
                     Lt = txInfo.LogicalTime,
                     DetectedAt = DateTime.UtcNow
                 }, cancellationToken);
 
                 logger.LogInformation("Transaction found for {Address}, TxHash: {Hash}, Lt: {Lt}",
-                    addressStr, txInfo.TxHash, txInfo.LogicalTime);
+                    addressRaw, txInfo.TxHash, txInfo.LogicalTime);
             }
 
             shardBlock.MarkAsProcessed();

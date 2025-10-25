@@ -1,10 +1,11 @@
 using MediatR;
+using TonSdk.Core;
 
 namespace JetPay.TonWatcher.Application.Commands.AddTrackedAddress;
 
 public record AddTrackedAddressCommand : IRequest<AddTrackedAddressResult>
 {
-    public required string Address { get; init; }
+    public required Address Address { get; init; }
 }
 
 public record AddTrackedAddressResult
