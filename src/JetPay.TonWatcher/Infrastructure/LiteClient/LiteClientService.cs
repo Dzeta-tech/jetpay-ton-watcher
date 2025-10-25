@@ -9,12 +9,9 @@ namespace JetPay.TonWatcher.Infrastructure.LiteClient;
 
 public class LiteClientService : ILiteClientService, IAsyncDisposable
 {
-    readonly TonSdk.Adnl.LiteClient.LiteClient client;
+    readonly LiteClientV2 client;
     readonly ILogger<LiteClientService> logger;
     readonly TokenBucketRateLimiter rateLimiter;
-    readonly SemaphoreSlim connectionLock = new(1, 1);
-    volatile bool isInitialized;
-    volatile bool isReconnecting;
 
     public LiteClientService(AppConfiguration config, ILogger<LiteClientService> logger)
     {
@@ -29,173 +26,69 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
             QueueLimit = 10000
         });
 
-        client = new TonSdk.Adnl.LiteClient.LiteClient(config.LiteClient.Host, config.LiteClient.Port,
-            config.LiteClient.PublicKey);
+        // Create client with single engine - auto-connects on first query, thread-safe
+        client = LiteClientV2.CreateSingle(
+            config.LiteClient.Host,
+            config.LiteClient.Port,
+            config.LiteClient.PublicKey,
+            reconnectTimeoutMs: 5000);
 
-        logger.LogInformation("LiteClient configured for {Host}:{Port} with {RPS} RPS (thread-safe SDK, no distributed lock needed)",
+        // Subscribe to engine events for logging
+        var engine = client.Engine;
+        engine.Connected += () => logger.LogInformation("LiteClient connected");
+        engine.Ready += () => logger.LogInformation("LiteClient ready");
+        engine.Closed += () => logger.LogWarning("LiteClient connection closed, will auto-reconnect");
+        engine.Error += (ex) => logger.LogError(ex, "LiteClient error occurred");
+
+        logger.LogInformation("LiteClient configured for {Host}:{Port} with {RPS} RPS (auto-connecting, thread-safe, event-driven)",
             config.LiteClient.Host, config.LiteClient.Port, config.LiteClient.Ratelimit);
     }
 
     public async ValueTask DisposeAsync()
     {
-        client.Disconnect();
+        client.Dispose();
         await rateLimiter.DisposeAsync();
-        connectionLock.Dispose();
     }
 
-    public async Task InitializeAsync()
+    public Task InitializeAsync()
     {
-        await EnsureConnectedAsync();
-    }
-
-    async Task EnsureConnectedAsync()
-    {
-        // Fast path: already connected
-        if (isInitialized)
-            return;
-
-        // Slow path: need to acquire lock and potentially connect
-        await connectionLock.WaitAsync();
-        try
-        {
-            // Double-check after acquiring lock
-            if (isInitialized)
-                return;
-
-            logger.LogInformation("Connecting to LiteClient...");
-            await client.Connect();
-            isInitialized = true;
-            logger.LogInformation("LiteClient connected successfully");
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to connect to LiteClient");
-            isInitialized = false;
-            throw;
-        }
-        finally
-        {
-            connectionLock.Release();
-        }
+        // No-op: new client auto-connects on first query
+        logger.LogInformation("LiteClient will auto-connect on first query");
+        return Task.CompletedTask;
     }
 
     public async Task<MasterChainInfoExtended> GetMasterChainInfoAsync()
     {
-        return await ExecuteAsync(liteClient => liteClient.GetMasterChainInfoExtended());
+        return await ExecuteAsync(async () => await client.GetMasterChainInfoExtendedAsync());
     }
 
     public async Task<BlockIdExtended[]> GetShardsAsync(BlockIdExtended blockId)
     {
-        byte[] shardsData = await ExecuteAsync(liteClient => liteClient.GetAllShardsInfo(blockId));
+        byte[] shardsData = await ExecuteAsync(async () => await client.GetAllShardsInfoAsync(blockId));
         return DeserializeShardsInformationResult(shardsData);
     }
 
     public async Task<BlockIdExtended?> LookupBlockAsync(int workchain, long shard, long seqno)
     {
-        BlockHeader? blockHeader = await ExecuteAsync(liteClient => liteClient.LookUpBlock(workchain, shard, seqno));
+        BlockHeader? blockHeader = await ExecuteAsync(async () => await client.LookupBlockAsync(workchain, shard, seqno));
         return blockHeader?.BlockId;
     }
 
     public async Task<ListBlockTransactionsResult> GetBlockTransactionsAsync(BlockIdExtended blockId,
         uint count = 10000)
     {
-        return await ExecuteAsync(liteClient => liteClient.ListBlockTransactions(blockId, count));
+        return await ExecuteAsync(async () => await client.ListBlockTransactionsAsync(blockId, count));
     }
 
-    async Task<T> ExecuteAsync<T>(Func<TonSdk.Adnl.LiteClient.LiteClient, Task<T>> operation)
+    async Task<T> ExecuteAsync<T>(Func<Task<T>> operation)
     {
         using RateLimitLease lease = await rateLimiter.AcquireAsync(permitCount: 1);
         if (!lease.IsAcquired)
             throw new InvalidOperationException("Failed to acquire rate limit token - queue full");
 
-        // Fast-fail if reconnection is in progress
-        if (isReconnecting)
-            throw new InvalidOperationException("LiteClient is reconnecting, please retry");
-
-        // Try to ensure connected without blocking on lock
-        if (!isInitialized)
-        {
-            // Fast path: someone else might be connecting, wait briefly
-            await Task.Delay(50);
-            
-            // If still not initialized, trigger connection
-            if (!isInitialized && connectionLock.Wait(0)) // Try acquire without waiting
-            {
-                try
-                {
-                    if (!isInitialized) // Double-check
-                    {
-                        logger.LogInformation("Connecting to LiteClient...");
-                        await client.Connect();
-                        isInitialized = true;
-                        logger.LogInformation("LiteClient connected successfully");
-                    }
-                }
-                finally
-                {
-                    connectionLock.Release();
-                }
-            }
-        }
-
-        try
-        {
-            // SDK is thread-safe with proper locking on cipher state
-            return await operation(client);
-        }
-        catch (Exception ex) when (
-            ex.Message.Contains("Connection to lite server must be init") ||
-            ex is IndexOutOfRangeException) // Catch cipher state corruption
-        {
-            // Connection issue detected - trigger reconnection ONCE
-            if (!isReconnecting && connectionLock.Wait(0)) // Non-blocking, first one wins
-            {
-                try
-                {
-                    // Mark as reconnecting to block all other operations
-                    isReconnecting = true;
-                    isInitialized = false;
-                    
-                    logger.LogWarning(ex, "LiteClient connection issue detected, reconnecting...");
-                    
-                    // Disconnect immediately to stop cipher usage
-                    client.Disconnect();
-                    
-                    // Fire-and-forget reconnection
-                    _ = Task.Run(async () =>
-                    {
-                        // Wait for in-flight operations to complete (they'll fail fast)
-                        await Task.Delay(200);
-                        
-                        await connectionLock.WaitAsync();
-                        try
-                        {
-                            logger.LogInformation("Starting LiteClient reconnection...");
-                            await client.Connect();
-                            isInitialized = true;
-                            isReconnecting = false; // Allow operations again
-                            logger.LogInformation("LiteClient reconnected successfully");
-                        }
-                        catch (Exception reconnectEx)
-                        {
-                            logger.LogError(reconnectEx, "Failed to reconnect LiteClient, will retry on next operation");
-                            isReconnecting = false; // Allow retry
-                        }
-                        finally
-                        {
-                            connectionLock.Release();
-                        }
-                    });
-                }
-                finally
-                {
-                    connectionLock.Release();
-                }
-            }
-            
-            // Throw the error - caller (MasterchainSyncService) will handle retry
-            throw;
-        }
+        // Client + engine handle all connection/reconnection logic internally
+        // Engine is thread-safe, just execute the query
+        return await operation();
     }
 
     BlockIdExtended[] DeserializeShardsInformationResult(byte[] data)

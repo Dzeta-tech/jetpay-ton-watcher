@@ -15,9 +15,14 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         base.OnModelCreating(modelBuilder);
 
         // Configure Address conversion for TrackedAddress entity
+        // Using ValueComparer ensures EF Core translates Address equality to SQL byte array comparison
+        // This prevents loading all addresses into memory for filtering
         modelBuilder.Entity<TrackedAddress>()
             .Property(e => e.Address)
-            .HasConversion(AddressConversionAttribute.GetConverter())
+            .HasConversion(
+                AddressConversionAttribute.GetConverter(),
+                TonSdk.Core.EntityFrameworkCore.AddressValueConverter.CreateComparer()
+            )
             .HasMaxLength(36); // 4 bytes (int32 workchain) + 32 bytes (hash)
     }
 }
