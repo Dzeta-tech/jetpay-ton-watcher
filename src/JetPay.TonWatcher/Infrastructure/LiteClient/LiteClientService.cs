@@ -107,44 +107,83 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
         if (!lease.IsAcquired)
             throw new InvalidOperationException("Failed to acquire rate limit token - queue full");
 
+        // Try to ensure connected without blocking on lock
+        if (!isInitialized)
+        {
+            // Fast path: someone else might be connecting, wait briefly
+            await Task.Delay(50);
+            
+            // If still not initialized, trigger connection
+            if (!isInitialized && connectionLock.Wait(0)) // Try acquire without waiting
+            {
+                try
+                {
+                    if (!isInitialized) // Double-check
+                    {
+                        logger.LogInformation("Connecting to LiteClient...");
+                        await client.Connect();
+                        isInitialized = true;
+                        logger.LogInformation("LiteClient connected successfully");
+                    }
+                }
+                finally
+                {
+                    connectionLock.Release();
+                }
+            }
+        }
+
         try
         {
-            // Ensure we're connected before executing (uses lock internally)
-            await EnsureConnectedAsync();
-            
             // SDK is thread-safe with proper locking on cipher state
             return await operation(client);
         }
         catch (Exception ex) when (
             ex.Message.Contains("Connection to lite server must be init") ||
-            ex is IndexOutOfRangeException) // Catch cipher state corruption during reconnection
+            ex is IndexOutOfRangeException) // Catch cipher state corruption
         {
-            // Connection was lost or cipher corrupted, need to fully reconnect
-            logger.LogWarning(ex, "LiteClient connection issue detected, reconnecting...");
-            
-            // Must acquire connection lock to prevent concurrent reconnection attempts
-            await connectionLock.WaitAsync();
-            try
+            // Connection issue detected - trigger reconnection in background
+            // Don't wait for it, just fail this operation and let caller retry
+            if (connectionLock.Wait(0)) // Non-blocking attempt to reconnect
             {
-                // Disconnect completely to reset cipher state
-                client.Disconnect();
-                isInitialized = false;
-                
-                // Small delay to ensure cleanup completes
-                await Task.Delay(100);
-                
-                // Reconnect with fresh cipher state
-                await client.Connect();
-                isInitialized = true;
-                logger.LogInformation("LiteClient reconnected successfully");
-            }
-            finally
-            {
-                connectionLock.Release();
+                try
+                {
+                    logger.LogWarning(ex, "LiteClient connection issue detected, reconnecting in background...");
+                    client.Disconnect();
+                    isInitialized = false;
+                    
+                    // Fire-and-forget reconnection
+                    _ = Task.Run(async () =>
+                    {
+                        await Task.Delay(100); // Brief delay for cleanup
+                        await connectionLock.WaitAsync();
+                        try
+                        {
+                            if (!isInitialized) // Check if someone else already reconnected
+                            {
+                                await client.Connect();
+                                isInitialized = true;
+                                logger.LogInformation("LiteClient reconnected successfully");
+                            }
+                        }
+                        catch (Exception reconnectEx)
+                        {
+                            logger.LogError(reconnectEx, "Failed to reconnect LiteClient");
+                        }
+                        finally
+                        {
+                            connectionLock.Release();
+                        }
+                    });
+                }
+                finally
+                {
+                    connectionLock.Release();
+                }
             }
             
-            // Retry the operation once with the fresh connection
-            return await operation(client);
+            // Throw the error - caller (MasterchainSyncService) will handle retry
+            throw;
         }
     }
 
