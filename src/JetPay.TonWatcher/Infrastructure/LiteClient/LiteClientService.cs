@@ -12,6 +12,8 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
     readonly TonSdk.Adnl.LiteClient.LiteClient client;
     readonly ILogger<LiteClientService> logger;
     readonly TokenBucketRateLimiter rateLimiter;
+    readonly SemaphoreSlim connectionLock = new(1, 1);
+    bool isInitialized;
 
     public LiteClientService(AppConfiguration config, ILogger<LiteClientService> logger)
     {
@@ -37,13 +39,43 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
     {
         client.Disconnect();
         await rateLimiter.DisposeAsync();
+        connectionLock.Dispose();
     }
 
     public async Task InitializeAsync()
     {
-        logger.LogInformation("Connecting to LiteClient...");
-        await client.Connect();
-        logger.LogInformation("LiteClient connected successfully");
+        await EnsureConnectedAsync();
+    }
+
+    async Task EnsureConnectedAsync()
+    {
+        // Fast path: already connected
+        if (isInitialized)
+            return;
+
+        // Slow path: need to acquire lock and potentially connect
+        await connectionLock.WaitAsync();
+        try
+        {
+            // Double-check after acquiring lock
+            if (isInitialized)
+                return;
+
+            logger.LogInformation("Connecting to LiteClient...");
+            await client.Connect();
+            isInitialized = true;
+            logger.LogInformation("LiteClient connected successfully");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to connect to LiteClient");
+            isInitialized = false;
+            throw;
+        }
+        finally
+        {
+            connectionLock.Release();
+        }
     }
 
     public async Task<MasterChainInfoExtended> GetMasterChainInfoAsync()
@@ -75,8 +107,23 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
         if (!lease.IsAcquired)
             throw new InvalidOperationException("Failed to acquire rate limit token - queue full");
 
-        // SDK is now thread-safe, no distributed lock needed
-        return await operation(client);
+        try
+        {
+            // Ensure we're connected before executing
+            await EnsureConnectedAsync();
+            
+            // SDK is now thread-safe, no distributed lock needed
+            return await operation(client);
+        }
+        catch (Exception ex) when (ex.Message.Contains("Connection to lite server must be init"))
+        {
+            // Connection was lost, mark as not initialized and retry once
+            logger.LogWarning("LiteClient connection lost, attempting to reconnect...");
+            isInitialized = false;
+            
+            await EnsureConnectedAsync();
+            return await operation(client);
+        }
     }
 
     BlockIdExtended[] DeserializeShardsInformationResult(byte[] data)
