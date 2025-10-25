@@ -13,7 +13,8 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
     readonly ILogger<LiteClientService> logger;
     readonly TokenBucketRateLimiter rateLimiter;
     readonly SemaphoreSlim connectionLock = new(1, 1);
-    bool isInitialized;
+    volatile bool isInitialized;
+    volatile bool isReconnecting;
 
     public LiteClientService(AppConfiguration config, ILogger<LiteClientService> logger)
     {
@@ -107,6 +108,10 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
         if (!lease.IsAcquired)
             throw new InvalidOperationException("Failed to acquire rate limit token - queue full");
 
+        // Fast-fail if reconnection is in progress
+        if (isReconnecting)
+            throw new InvalidOperationException("LiteClient is reconnecting, please retry");
+
         // Try to ensure connected without blocking on lock
         if (!isInitialized)
         {
@@ -142,33 +147,39 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
             ex.Message.Contains("Connection to lite server must be init") ||
             ex is IndexOutOfRangeException) // Catch cipher state corruption
         {
-            // Connection issue detected - trigger reconnection in background
-            // Don't wait for it, just fail this operation and let caller retry
-            if (connectionLock.Wait(0)) // Non-blocking attempt to reconnect
+            // Connection issue detected - trigger reconnection ONCE
+            if (!isReconnecting && connectionLock.Wait(0)) // Non-blocking, first one wins
             {
                 try
                 {
-                    logger.LogWarning(ex, "LiteClient connection issue detected, reconnecting in background...");
-                    client.Disconnect();
+                    // Mark as reconnecting to block all other operations
+                    isReconnecting = true;
                     isInitialized = false;
+                    
+                    logger.LogWarning(ex, "LiteClient connection issue detected, reconnecting...");
+                    
+                    // Disconnect immediately to stop cipher usage
+                    client.Disconnect();
                     
                     // Fire-and-forget reconnection
                     _ = Task.Run(async () =>
                     {
-                        await Task.Delay(100); // Brief delay for cleanup
+                        // Wait for in-flight operations to complete (they'll fail fast)
+                        await Task.Delay(200);
+                        
                         await connectionLock.WaitAsync();
                         try
                         {
-                            if (!isInitialized) // Check if someone else already reconnected
-                            {
-                                await client.Connect();
-                                isInitialized = true;
-                                logger.LogInformation("LiteClient reconnected successfully");
-                            }
+                            logger.LogInformation("Starting LiteClient reconnection...");
+                            await client.Connect();
+                            isInitialized = true;
+                            isReconnecting = false; // Allow operations again
+                            logger.LogInformation("LiteClient reconnected successfully");
                         }
                         catch (Exception reconnectEx)
                         {
-                            logger.LogError(reconnectEx, "Failed to reconnect LiteClient");
+                            logger.LogError(reconnectEx, "Failed to reconnect LiteClient, will retry on next operation");
+                            isReconnecting = false; // Allow retry
                         }
                         finally
                         {
