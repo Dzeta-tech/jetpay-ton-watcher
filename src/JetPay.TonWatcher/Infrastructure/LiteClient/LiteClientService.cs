@@ -77,10 +77,10 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
         if (!lease.IsAcquired)
             throw new InvalidOperationException("Failed to acquire rate limit token - queue full");
 
-        // Acquire distributed lock across all services
-        using IDisposable? lockHandle = await distributedLock.AcquireLockAsync("lite-client", TimeSpan.FromSeconds(30));
+        // Acquire distributed lock with short timeout since lite client calls are fast
+        using IDisposable? lockHandle = await distributedLock.AcquireLockAsync("lite-client", TimeSpan.FromSeconds(5));
         if (lockHandle == null)
-            throw new InvalidOperationException("Failed to acquire distributed lock for lite client");
+            throw new TimeoutException("Failed to acquire lite client lock within 5s - queue might be backed up");
 
         return await operation(client);
     }
