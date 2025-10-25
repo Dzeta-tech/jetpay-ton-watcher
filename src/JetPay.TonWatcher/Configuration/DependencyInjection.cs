@@ -7,7 +7,6 @@ using JetPay.TonWatcher.Infrastructure.LiteClient;
 using JetPay.TonWatcher.Infrastructure.Messaging;
 using JetPay.TonWatcher.Infrastructure.Persistence;
 using JetPay.TonWatcher.Infrastructure.Persistence.Repositories;
-using JetPay.TonWatcher.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Serilog.Events;
@@ -91,7 +90,6 @@ public static class DependencyInjection
         builder.Services.AddScoped<IShardBlockRepository, ShardBlockRepository>();
 
         // Infrastructure Services
-        builder.Services.AddSingleton<IDistributedLock, RedisDistributedLock>();
         builder.Services.AddSingleton<ILiteClientService, LiteClientService>();
         builder.Services.AddScoped<IMessagePublisher, RedisStreamPublisher>();
 

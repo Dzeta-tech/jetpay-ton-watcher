@@ -54,14 +54,16 @@ public static class WebApplicationExtensions
         // Initialize Bloom Filter with existing tracked addresses
         ApplicationDbContext dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         IBloomFilter bloomFilter = scope.ServiceProvider.GetRequiredService<IBloomFilter>();
-        byte[][] trackedAccounts = await dbContext.TrackedAddresses
+        var trackedAddresses = await dbContext.TrackedAddresses
             .Where(x => x.IsTrackingActive)
-            .Select(x => x.Account)
             .ToArrayAsync();
 
-        foreach (byte[] account in trackedAccounts)
-            await bloomFilter.AddAsync(account);
+        foreach (var trackedAddress in trackedAddresses)
+        {
+            byte[] accountHash = trackedAddress.Address.Hash.ToArray();
+            await bloomFilter.AddAsync(accountHash);
+        }
 
-        Log.Information("Initialized bloom filter with {Count} tracked addresses", trackedAccounts.Length);
+        Log.Information("Initialized bloom filter with {Count} tracked addresses", trackedAddresses.Length);
     }
 }

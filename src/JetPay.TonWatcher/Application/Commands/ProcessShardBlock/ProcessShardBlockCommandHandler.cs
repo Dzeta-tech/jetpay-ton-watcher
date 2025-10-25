@@ -62,12 +62,13 @@ public class ProcessShardBlockCommandHandler(
                 if (!await bloomFilter.ContainsAsync(tx.Account))
                     continue;
 
-                string addressStr = new Address(shardBlock.Workchain, tx.Account).ToString(AddressType.Base64, new AddressStringifyOptions(false, false, true));
+                Address txAddress = new(shardBlock.Workchain, tx.Account);
+                string addressStr = txAddress.ToBase64(bounceable: false, testOnly: false, urlSafe: true);
 
                 TrackedAddress? trackedAddress = await trackedAddressRepository
                     .GetByAccountAsync(shardBlock.Workchain, tx.Account, cancellationToken);
 
-                if (trackedAddress == null || !trackedAddress.IsTrackingActive)
+                if (trackedAddress is not { IsTrackingActive: true })
                     continue;
 
                 TransactionInfo txInfo = new()

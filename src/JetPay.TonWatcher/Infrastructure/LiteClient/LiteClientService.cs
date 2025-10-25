@@ -12,12 +12,10 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
     readonly TonSdk.Adnl.LiteClient.LiteClient client;
     readonly ILogger<LiteClientService> logger;
     readonly TokenBucketRateLimiter rateLimiter;
-    readonly IDistributedLock distributedLock;
 
-    public LiteClientService(AppConfiguration config, IDistributedLock distributedLock, ILogger<LiteClientService> logger)
+    public LiteClientService(AppConfiguration config, ILogger<LiteClientService> logger)
     {
         this.logger = logger;
-        this.distributedLock = distributedLock;
 
         rateLimiter = new TokenBucketRateLimiter(new TokenBucketRateLimiterOptions
         {
@@ -31,7 +29,7 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
         client = new TonSdk.Adnl.LiteClient.LiteClient(config.LiteClient.Host, config.LiteClient.Port,
             config.LiteClient.PublicKey);
 
-        logger.LogInformation("LiteClient configured for {Host}:{Port} with {RPS} RPS",
+        logger.LogInformation("LiteClient configured for {Host}:{Port} with {RPS} RPS (thread-safe SDK, no distributed lock needed)",
             config.LiteClient.Host, config.LiteClient.Port, config.LiteClient.Ratelimit);
     }
 
@@ -77,11 +75,7 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
         if (!lease.IsAcquired)
             throw new InvalidOperationException("Failed to acquire rate limit token - queue full");
 
-        // Acquire distributed lock with short timeout since lite client calls are fast
-        using IDisposable? lockHandle = await distributedLock.AcquireLockAsync("lite-client", TimeSpan.FromSeconds(5));
-        if (lockHandle == null)
-            throw new TimeoutException("Failed to acquire lite client lock within 5s - queue might be backed up");
-
+        // SDK is now thread-safe, no distributed lock needed
         return await operation(client);
     }
 

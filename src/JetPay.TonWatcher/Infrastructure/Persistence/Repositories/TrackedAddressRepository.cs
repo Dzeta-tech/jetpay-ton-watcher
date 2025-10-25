@@ -1,6 +1,7 @@
 using JetPay.TonWatcher.Application.Interfaces;
 using JetPay.TonWatcher.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using TonSdk.Core;
 
 namespace JetPay.TonWatcher.Infrastructure.Persistence.Repositories;
 
@@ -15,9 +16,10 @@ public class TrackedAddressRepository(ApplicationDbContext dbContext) : ITracked
     public async Task<TrackedAddress?> GetByAccountAsync(int workchain, byte[] account,
         CancellationToken cancellationToken = default)
     {
+        Address searchAddress = new(workchain, account);
         return await dbContext.TrackedAddresses
             .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Workchain == workchain && x.Account == account, cancellationToken);
+            .FirstOrDefaultAsync(x => x.Address == searchAddress, cancellationToken);
     }
 
     public async Task<List<TrackedAddress>> GetActiveAsync(CancellationToken cancellationToken = default)

@@ -19,12 +19,10 @@ public class AddTrackedAddressCommandHandler(
         {
             Address parsedAddress = new(request.Address);
 
-            TrackedAddress trackedAddress = TrackedAddress.Create(
-                parsedAddress.GetWorkchain(),
-                parsedAddress.GetHash());
+            TrackedAddress trackedAddress = TrackedAddress.Create(parsedAddress);
 
             await trackedAddressRepository.AddAsync(trackedAddress, cancellationToken);
-            await bloomFilter.AddAsync(parsedAddress.GetHash());
+            await bloomFilter.AddAsync(parsedAddress.Hash.ToArray());
 
             logger.LogInformation("Added tracked address {Address} with ID {Id}",
                 request.Address, trackedAddress.Id);
