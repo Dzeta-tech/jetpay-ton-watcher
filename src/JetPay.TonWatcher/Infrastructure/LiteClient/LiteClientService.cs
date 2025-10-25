@@ -31,7 +31,8 @@ public class LiteClientService : ILiteClientService, IAsyncDisposable
             config.LiteClient.Host,
             config.LiteClient.Port,
             config.LiteClient.PublicKey,
-            reconnectTimeoutMs: 5000);
+            reconnectTimeoutMs: 5000,
+            logger: logger);
 
         // Subscribe to engine events for logging
         var engine = client.Engine;
