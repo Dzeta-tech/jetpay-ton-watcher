@@ -4,7 +4,7 @@ using JetPay.TonWatcher.Application.Common;
 using JetPay.TonWatcher.Application.Queries.IsAddressTracked;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
-using TonSdk.Core;
+using Ton.Core.Addresses;
 
 namespace JetPay.TonWatcher.Presentation.Controllers;
 
@@ -19,25 +19,22 @@ public class TrackedAddressesController(IMediator mediator) : ControllerBase
     }
 
     /// <summary>
-    /// Add an address to track. Address can be in any format (raw 0:hex, base64, etc.)
+    ///     Add an address to track. Address can be in any format (raw 0:hex, base64, etc.)
     /// </summary>
     [HttpPost("add/{address}")]
     public async Task<IActionResult> AddTrackedAddress(string address)
     {
-        if (string.IsNullOrEmpty(address)) 
+        if (string.IsNullOrEmpty(address))
             return BadRequest(ApiResponse.FailureResult("Address is required"));
 
         try
         {
             // Parse address from string at API boundary
-            Address parsedAddress = new(address);
-            
-            AddTrackedAddressResult result = await mediator.Send(new AddTrackedAddressCommand { Address = parsedAddress });
+            Address parsedAddress = Address.Parse(address);
 
-            if (!result.Success)
-                return BadRequest(ApiResponse.FailureResult(result.ErrorMessage ?? "Failed to add address"));
+            await mediator.Send(new AddTrackedAddressCommand { Address = parsedAddress });
 
-            return Ok(ApiResponse<Guid>.SuccessResult(result.AddressId!.Value));
+            return Ok(ApiResponse.SuccessResult());
         }
         catch (ArgumentException ex)
         {
@@ -46,19 +43,20 @@ public class TrackedAddressesController(IMediator mediator) : ControllerBase
     }
 
     /// <summary>
-    /// Disable tracking for an address. Address can be in any format (raw 0:hex, base64, etc.)
+    ///     Disable tracking for an address. Address can be in any format (raw 0:hex, base64, etc.)
     /// </summary>
     [HttpPost("disable/{address}")]
     public async Task<IActionResult> DisableTrackedAddress(string address)
     {
-        if (string.IsNullOrEmpty(address)) 
+        if (string.IsNullOrEmpty(address))
             return BadRequest(ApiResponse.FailureResult("Address is required"));
 
         try
         {
             // Parse address from string at API boundary
-            Address parsedAddress = new(address);
-            
+            Address parsedAddress = Address.Parse(address);
+            ;
+
             bool success = await mediator.Send(new DisableTrackedAddressCommand { Address = parsedAddress });
 
             if (!success)
@@ -73,20 +71,20 @@ public class TrackedAddressesController(IMediator mediator) : ControllerBase
     }
 
     /// <summary>
-    /// Check if an address is being tracked (returns true if exists and enabled, false otherwise).
-    /// Address can be in any format (raw 0:hex, base64, etc.)
+    ///     Check if an address is being tracked (returns true if exists and enabled, false otherwise).
+    ///     Address can be in any format (raw 0:hex, base64, etc.)
     /// </summary>
     [HttpGet("is-tracked/{address}")]
     public async Task<IActionResult> IsAddressTracked(string address)
     {
-        if (string.IsNullOrEmpty(address)) 
+        if (string.IsNullOrEmpty(address))
             return BadRequest(ApiResponse.FailureResult("Address is required"));
 
         try
         {
             // Parse address from string at API boundary
-            Address parsedAddress = new(address);
-            
+            Address parsedAddress = Address.Parse(address);
+
             bool isTracked = await mediator.Send(new IsAddressTrackedQuery { Address = parsedAddress });
 
             return Ok(ApiResponse<bool>.SuccessResult(isTracked));

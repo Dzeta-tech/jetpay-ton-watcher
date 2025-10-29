@@ -1,5 +1,5 @@
 using BloomFilter;
-using JetPay.TonWatcher.Application.Interfaces;
+using JetPay.TonWatcher.Domain.Entities;
 using JetPay.TonWatcher.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
@@ -47,22 +47,14 @@ public static class WebApplicationExtensions
     {
         using IServiceScope scope = app.Services.CreateScope();
 
-        // Initialize LiteClient
-        ILiteClientService liteClientService = scope.ServiceProvider.GetRequiredService<ILiteClientService>();
-        await liteClientService.InitializeAsync();
-
         // Initialize Bloom Filter with existing tracked addresses
         ApplicationDbContext dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         IBloomFilter bloomFilter = scope.ServiceProvider.GetRequiredService<IBloomFilter>();
-        var trackedAddresses = await dbContext.TrackedAddresses
+        TrackedAddress[] trackedAddresses = await dbContext.TrackedAddresses
             .Where(x => x.IsTrackingActive)
             .ToArrayAsync();
 
-        foreach (var trackedAddress in trackedAddresses)
-        {
-            byte[] accountHash = trackedAddress.Address.Hash.ToArray();
-            await bloomFilter.AddAsync(accountHash);
-        }
+        foreach (TrackedAddress trackedAddress in trackedAddresses) await bloomFilter.AddAsync(trackedAddress.Hash);
 
         Log.Information("Initialized bloom filter with {Count} tracked addresses", trackedAddresses.Length);
     }

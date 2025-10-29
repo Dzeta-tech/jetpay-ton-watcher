@@ -1,13 +1,14 @@
 using JetPay.TonWatcher.Application.Interfaces;
 using JetPay.TonWatcher.Domain.Entities;
 using MediatR;
-using TonSdk.Adnl.LiteClient;
+using Ton.LiteClient;
+using Ton.LiteClient.Models;
 
 namespace JetPay.TonWatcher.Application.Commands.SyncShardBlocks;
 
 public class SyncShardBlocksCommandHandler(
     IShardBlockRepository shardBlockRepository,
-    ILiteClientService liteClientService,
+    LiteClient liteClient,
     ILogger<SyncShardBlocksCommandHandler> logger)
     : IRequestHandler<SyncShardBlocksCommand, SyncShardBlocksResult>
 {
@@ -17,13 +18,13 @@ public class SyncShardBlocksCommandHandler(
 
         try
         {
-            MasterChainInfoExtended masterchainInfo = await liteClientService.GetMasterChainInfoAsync();
-            BlockIdExtended[] shards = await liteClientService.GetShardsAsync(masterchainInfo.LastBlockId);
+            MasterchainInfo masterchainInfo = await liteClient.GetMasterchainInfoAsync(cancellationToken);
+            BlockId[] shards = await liteClient.GetAllShardsInfoAsync(masterchainInfo.Last, cancellationToken);
 
-            if (shards == null || shards.Length == 0)
+            if (shards.Length == 0)
                 return new SyncShardBlocksResult { Success = true, BlocksAdded = 0 };
 
-            foreach (BlockIdExtended shard in shards)
+            foreach (BlockId shard in shards)
             {
                 int blocksAdded = await ProcessShard(shard, cancellationToken);
                 totalBlocksAdded += blocksAdded;
@@ -42,7 +43,7 @@ public class SyncShardBlocksCommandHandler(
         }
     }
 
-    async Task<int> ProcessShard(BlockIdExtended shard, CancellationToken cancellationToken)
+    async Task<int> ProcessShard(BlockId shard, CancellationToken cancellationToken)
     {
         long maxSeqno = await shardBlockRepository.GetMaxSeqnoAsync(shard.Shard, cancellationToken);
 

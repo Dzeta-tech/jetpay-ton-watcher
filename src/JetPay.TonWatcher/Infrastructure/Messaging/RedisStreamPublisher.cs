@@ -13,7 +13,7 @@ public class RedisStreamPublisher(RedisDatabase redis, ILogger<RedisStreamPublis
         try
         {
             string json = JsonSerializer.Serialize(message);
-            NameValueEntry[] entries = [new NameValueEntry("data", json)];
+            NameValueEntry[] entries = [new("data", json)];
 
             await redis.StreamAddAsync(StreamKey, entries);
 
@@ -25,4 +25,3 @@ public class RedisStreamPublisher(RedisDatabase redis, ILogger<RedisStreamPublis
         }
     }
 }
-

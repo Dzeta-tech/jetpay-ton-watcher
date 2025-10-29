@@ -3,7 +3,6 @@ using System.Text.Json.Serialization;
 using Dzeta.Configuration;
 using JetPay.TonWatcher.Application.Interfaces;
 using JetPay.TonWatcher.Infrastructure.BackgroundServices;
-using JetPay.TonWatcher.Infrastructure.LiteClient;
 using JetPay.TonWatcher.Infrastructure.Messaging;
 using JetPay.TonWatcher.Infrastructure.Persistence;
 using JetPay.TonWatcher.Infrastructure.Persistence.Repositories;
@@ -11,6 +10,8 @@ using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Serilog.Events;
 using StackExchange.Redis;
+using Ton.LiteClient;
+using Ton.LiteClient.Engines;
 
 namespace JetPay.TonWatcher.Configuration;
 
@@ -91,7 +92,30 @@ public static class DependencyInjection
         builder.Services.AddScoped<IShardBlockRepository, ShardBlockRepository>();
 
         // Infrastructure Services
-        builder.Services.AddSingleton<ILiteClientService, LiteClientService>();
+        builder.Services.AddSingleton<LiteClient>(serviceProvider =>
+        {
+            AppConfiguration config = serviceProvider.GetRequiredService<AppConfiguration>();
+            ILogger<LiteClient> logger = serviceProvider.GetRequiredService<ILogger<LiteClient>>();
+
+            // Create SingleLiteEngine -> RateLimitedLiteEngine -> LiteClient
+            LiteSingleEngine engine = new(
+                config.LiteClient.Host,
+                config.LiteClient.Port,
+                Convert.FromBase64String(config.LiteClient.PublicKey)
+            );
+
+            RateLimitedLiteEngine rateLimitedEngine = new(
+                engine,
+                config.LiteClient.Ratelimit
+            );
+
+            LiteClient liteClient = new(rateLimitedEngine);
+
+            logger.LogInformation("LiteClient initialized for {Host}:{Port} with {RPS} RPS",
+                config.LiteClient.Host, config.LiteClient.Port, config.LiteClient.Ratelimit);
+
+            return liteClient;
+        });
         builder.Services.AddScoped<IMessagePublisher, RedisStreamPublisher>();
 
         // Bloom Filter

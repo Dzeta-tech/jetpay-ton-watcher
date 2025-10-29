@@ -41,7 +41,7 @@ public class BlockProcessorService(
 
                     processedCount++;
 
-                    if (result.Success && result.TransactionsFound > 0)
+                    if (result is { Success: true, TransactionsFound: > 0 })
                         logger.LogInformation("Processed block {Shard}:{Seqno}, found {Count} transactions",
                             block.Shard, block.Seqno, result.TransactionsFound);
 

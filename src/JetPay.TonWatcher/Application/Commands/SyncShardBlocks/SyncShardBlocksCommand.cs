@@ -2,9 +2,7 @@ using MediatR;
 
 namespace JetPay.TonWatcher.Application.Commands.SyncShardBlocks;
 
-public record SyncShardBlocksCommand : IRequest<SyncShardBlocksResult>
-{
-}
+public record SyncShardBlocksCommand : IRequest<SyncShardBlocksResult>;
 
 public record SyncShardBlocksResult
 {

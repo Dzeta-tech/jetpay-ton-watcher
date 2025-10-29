@@ -20,7 +20,7 @@ public class MasterchainSyncService(
 
                 SyncShardBlocksResult result = await mediator.Send(new SyncShardBlocksCommand(), stoppingToken);
 
-                if (result.Success && result.BlocksAdded > 0)
+                if (result is { Success: true, BlocksAdded: > 0 })
                     logger.LogInformation("Synced {Count} new shard blocks", result.BlocksAdded);
             }
             catch (TimeoutException ex)

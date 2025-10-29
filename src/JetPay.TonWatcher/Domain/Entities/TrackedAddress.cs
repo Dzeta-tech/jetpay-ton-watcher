@@ -1,7 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using JetPay.TonWatcher.Infrastructure.Persistence.Attributes;
-using TonSdk.Core;
+using Ton.Core.Addresses;
 
 namespace JetPay.TonWatcher.Domain.Entities;
 
@@ -15,9 +14,9 @@ public class TrackedAddress
     [DatabaseGenerated(DatabaseGeneratedOption.None)]
     public Guid Id { get; private set; }
 
-    [AddressConversion]
-    [MaxLength(36)] // 4 bytes (int32 workchain) + 32 bytes (hash)
-    public Address Address { get; private set; }
+    public int Workchain { get; private set; }
+
+    [Length(32, 32)] [MaxLength(32)] public byte[] Hash { get; private set; }
 
     public bool IsTrackingActive { get; private set; }
 
@@ -28,7 +27,8 @@ public class TrackedAddress
         return new TrackedAddress
         {
             Id = Guid.NewGuid(),
-            Address = address,
+            Workchain = address.Workchain,
+            Hash = address.Hash,
             IsTrackingActive = true,
             CreatedAt = DateTime.UtcNow
         };
@@ -37,10 +37,5 @@ public class TrackedAddress
     public void Deactivate()
     {
         IsTrackingActive = false;
-    }
-
-    public void Activate()
-    {
-        IsTrackingActive = true;
     }
 }

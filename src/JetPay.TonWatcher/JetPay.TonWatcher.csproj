@@ -7,23 +7,19 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="BloomFilter.NetCore" Version="2.5.3" />
-        <PackageReference Include="Dzeta.Configuration" Version="1.0.1" />
-        <PackageReference Include="MediatR" Version="12.4.1" />
-        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.1" />
+        <PackageReference Include="BloomFilter.NetCore" Version="2.5.3"/>
+        <PackageReference Include="Dzeta.Configuration" Version="1.0.1"/>
+        <PackageReference Include="MediatR" Version="12.4.1"/>
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.1"/>
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.10">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
-        <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
-        <PackageReference Include="StackExchange.Redis" Version="2.9.32" />
-    </ItemGroup>
-
-    <ItemGroup>
-        <PackageReference Include="Dzeta.TonSdk.Adnl" Version="0.5.4" />
-        <PackageReference Include="Dzeta.TonSdk.Core" Version="0.5.0" />
-        <PackageReference Include="Dzeta.TonSdk.Core.EntityFrameworkCore" Version="0.2.0" />
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4"/>
+        <PackageReference Include="Serilog.AspNetCore" Version="9.0.0"/>
+        <PackageReference Include="StackExchange.Redis" Version="2.9.32"/>
+        <PackageReference Include="Ton.Core" Version="0.2.1"/>
+        <PackageReference Include="Ton.LiteClient" Version="0.2.1"/>
     </ItemGroup>
 
 </Project>
