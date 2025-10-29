@@ -16,7 +16,7 @@ public class TrackedAddress
 
     public int Workchain { get; private set; }
 
-    [Length(32, 32)] [MaxLength(32)] public byte[] Hash { get; private set; }
+    [Length(32, 32)] [MaxLength(32)] public byte[] Hash { get; private set; } = null!;
 
     public bool IsTrackingActive { get; private set; }
 

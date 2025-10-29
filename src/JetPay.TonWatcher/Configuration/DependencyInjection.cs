@@ -98,10 +98,12 @@ public static class DependencyInjection
             ILogger<LiteClient> logger = serviceProvider.GetRequiredService<ILogger<LiteClient>>();
 
             // Create SingleLiteEngine -> RateLimitedLiteEngine -> LiteClient
+            // Public key is expected in hex format (64 chars = 32 bytes)
+            byte[] publicKey = Convert.FromHexString(config.LiteClient.PublicKey);
             LiteSingleEngine engine = new(
                 config.LiteClient.Host,
                 config.LiteClient.Port,
-                Convert.FromBase64String(config.LiteClient.PublicKey)
+                publicKey
             );
 
             RateLimitedLiteEngine rateLimitedEngine = new(
