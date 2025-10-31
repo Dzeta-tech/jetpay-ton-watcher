@@ -66,10 +66,10 @@ public class SyncShardBlocksCommandHandler(
         {
             ShardBlock shardBlock = ShardBlock.Create(shard.Workchain, shard.Shard, seqno);
             await dbContext.ShardBlocks.AddAsync(shardBlock, cancellationToken);
-            await dbContext.SaveChangesAsync(cancellationToken);
             blocksAdded++;
         }
 
+        await dbContext.SaveChangesAsync(cancellationToken);
         return blocksAdded;
     }
 }
