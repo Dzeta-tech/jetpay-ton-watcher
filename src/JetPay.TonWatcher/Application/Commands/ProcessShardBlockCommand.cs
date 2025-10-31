@@ -1,17 +1,29 @@
 using BloomFilter;
-using JetPay.TonWatcher.Application.Interfaces;
 using JetPay.TonWatcher.Domain.Entities;
 using JetPay.TonWatcher.Domain.Events;
 using JetPay.TonWatcher.Domain.ValueObjects;
+using JetPay.TonWatcher.Infrastructure.Persistence;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using Ton.LiteClient;
 using Ton.LiteClient.Models;
 
-namespace JetPay.TonWatcher.Application.Commands.ProcessShardBlock;
+namespace JetPay.TonWatcher.Application.Commands;
+
+public record ProcessShardBlockCommand : IRequest<ProcessShardBlockResult>
+{
+    public required Guid ShardBlockId { get; init; }
+}
+
+public record ProcessShardBlockResult
+{
+    public bool Success { get; init; }
+    public int TransactionsFound { get; init; }
+    public List<TransactionInfo> Transactions { get; init; } = [];
+}
 
 public class ProcessShardBlockCommandHandler(
-    IShardBlockRepository shardBlockRepository,
-    ITrackedAddressRepository trackedAddressRepository,
+    ApplicationDbContext dbContext,
     LiteClient liteClient,
     IBloomFilter bloomFilter,
     IMediator mediator,
@@ -21,8 +33,8 @@ public class ProcessShardBlockCommandHandler(
     public async Task<ProcessShardBlockResult> Handle(ProcessShardBlockCommand request,
         CancellationToken cancellationToken)
     {
-        ShardBlock? shardBlock = await shardBlockRepository.GetByIdAsync(request.ShardBlockId, cancellationToken);
-        if (shardBlock == null)
+        ShardBlock? shardBlock = await dbContext.ShardBlocks.FindAsync([request.ShardBlockId], cancellationToken);
+        if (shardBlock is null)
         {
             logger.LogWarning("ShardBlock {Id} not found", request.ShardBlockId);
             return new ProcessShardBlockResult { Success = false };
@@ -30,7 +42,7 @@ public class ProcessShardBlockCommandHandler(
 
         if (shardBlock.IsProcessed) return new ProcessShardBlockResult { Success = true, TransactionsFound = 0 };
 
-        List<TransactionInfo> foundTransactions = new();
+        List<TransactionInfo> foundTransactions = [];
 
         try
         {
@@ -40,7 +52,7 @@ public class ProcessShardBlockCommandHandler(
                 blockId = await liteClient.LookupBlockAsync(
                     shardBlock.Workchain,
                     shardBlock.Shard,
-                    (uint)shardBlock.Seqno,
+                    shardBlock.Seqno,
                     cancellationToken);
             }
             catch
@@ -56,49 +68,40 @@ public class ProcessShardBlockCommandHandler(
             if (blockTransactions.Transactions.Count == 0)
             {
                 shardBlock.MarkAsProcessed();
-                await shardBlockRepository.UpdateAsync(shardBlock, cancellationToken);
+                await dbContext.SaveChangesAsync(cancellationToken);
                 return new ProcessShardBlockResult { Success = true, TransactionsFound = 0 };
             }
 
             foreach (BlockTransaction tx in blockTransactions.Transactions)
             {
-                if (!await bloomFilter.ContainsAsync(tx.Account))
+                if (!await bloomFilter.ContainsAsync(tx.Account.Hash))
                     continue;
 
-                TrackedAddress? trackedAddress = await trackedAddressRepository
-                    .GetByAddressHashAsync(tx.Account, cancellationToken);
+                TrackedAddress? trackedAddress = await dbContext.TrackedAddresses.AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.Address == tx.Account, cancellationToken);
 
                 if (trackedAddress is not { IsTrackingActive: true })
                     continue;
 
-                string addressRaw = $"{blockId.Workchain}:{tx.AccountHex}";
-
                 TransactionInfo txInfo = new()
                 {
-                    Address = addressRaw,
+                    Address = tx.Account,
                     TxHash = Convert.ToBase64String(tx.Hash),
                     LogicalTime = tx.Lt,
-                    AccountHash = tx.Account,
-                    Workchain = shardBlock.Workchain
                 };
 
                 foundTransactions.Add(txInfo);
 
-                // Publish domain event with address format
                 await mediator.Publish(new TransactionFoundEvent
                 {
-                    Address = addressRaw,
+                    Address = tx.Account,
                     TxHash = txInfo.TxHash,
                     Lt = txInfo.LogicalTime,
-                    DetectedAt = DateTime.UtcNow
                 }, cancellationToken);
-
-                logger.LogInformation("Transaction found for {Address}, TxHash: {Hash}, Lt: {Lt}",
-                    addressRaw, txInfo.TxHash, txInfo.LogicalTime);
             }
 
             shardBlock.MarkAsProcessed();
-            await shardBlockRepository.UpdateAsync(shardBlock, cancellationToken);
+            await dbContext.SaveChangesAsync(cancellationToken);
 
             return new ProcessShardBlockResult
             {

@@ -1,4 +1,4 @@
-using JetPay.TonWatcher.Application.Commands.SyncShardBlocks;
+using JetPay.TonWatcher.Application.Commands;
 using MediatR;
 
 namespace JetPay.TonWatcher.Infrastructure.BackgroundServices;

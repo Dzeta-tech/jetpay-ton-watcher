@@ -19,13 +19,13 @@ public class ShardBlock
 
     public long Shard { get; private set; }
 
-    public long Seqno { get; private set; }
+    public uint Seqno { get; private set; }
 
     public bool IsProcessed { get; private set; }
 
     public DateTime? ProcessedAt { get; private set; }
 
-    public static ShardBlock Create(int workchain, long shard, long seqno)
+    public static ShardBlock Create(int workchain, long shard, uint seqno)
     {
         return new ShardBlock
         {

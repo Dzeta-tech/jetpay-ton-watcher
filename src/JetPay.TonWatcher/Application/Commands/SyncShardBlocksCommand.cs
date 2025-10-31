@@ -1,13 +1,22 @@
-using JetPay.TonWatcher.Application.Interfaces;
 using JetPay.TonWatcher.Domain.Entities;
+using JetPay.TonWatcher.Infrastructure.Persistence;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using Ton.LiteClient;
 using Ton.LiteClient.Models;
 
-namespace JetPay.TonWatcher.Application.Commands.SyncShardBlocks;
+namespace JetPay.TonWatcher.Application.Commands;
+
+public record SyncShardBlocksCommand : IRequest<SyncShardBlocksResult>;
+
+public record SyncShardBlocksResult
+{
+    public bool Success { get; init; }
+    public int BlocksAdded { get; init; }
+}
 
 public class SyncShardBlocksCommandHandler(
-    IShardBlockRepository shardBlockRepository,
+    ApplicationDbContext dbContext,
     LiteClient liteClient,
     ILogger<SyncShardBlocksCommandHandler> logger)
     : IRequestHandler<SyncShardBlocksCommand, SyncShardBlocksResult>
@@ -45,16 +54,19 @@ public class SyncShardBlocksCommandHandler(
 
     async Task<int> ProcessShard(BlockId shard, CancellationToken cancellationToken)
     {
-        long maxSeqno = await shardBlockRepository.GetMaxSeqnoAsync(shard.Shard, cancellationToken);
+        uint maxSeqno = await dbContext.ShardBlocks.AsNoTracking().Where(x => x.Shard == shard.Shard)
+            .OrderByDescending(x => x.Seqno).Select(x => x.Seqno)
+         .FirstOrDefaultAsync(cancellationToken);
 
         if (maxSeqno == 0)
             maxSeqno = shard.Seqno - 1;
 
         int blocksAdded = 0;
-        for (long seqno = maxSeqno + 1; seqno <= shard.Seqno; seqno++)
+        for (uint seqno = maxSeqno + 1; seqno <= shard.Seqno; seqno++)
         {
             ShardBlock shardBlock = ShardBlock.Create(shard.Workchain, shard.Shard, seqno);
-            await shardBlockRepository.AddAsync(shardBlock, cancellationToken);
+            await dbContext.ShardBlocks.AddAsync(shardBlock, cancellationToken);
+            await dbContext.SaveChangesAsync(cancellationToken);
             blocksAdded++;
         }
 

@@ -5,7 +5,6 @@ using JetPay.TonWatcher.Application.Interfaces;
 using JetPay.TonWatcher.Infrastructure.BackgroundServices;
 using JetPay.TonWatcher.Infrastructure.Messaging;
 using JetPay.TonWatcher.Infrastructure.Persistence;
-using JetPay.TonWatcher.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Serilog.Events;
@@ -87,18 +86,12 @@ public static class DependencyInjection
         // MediatR
         builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly()));
 
-        // Repositories
-        builder.Services.AddScoped<ITrackedAddressRepository, TrackedAddressRepository>();
-        builder.Services.AddScoped<IShardBlockRepository, ShardBlockRepository>();
-
         // Infrastructure Services
         builder.Services.AddSingleton<LiteClient>(serviceProvider =>
         {
             AppConfiguration config = serviceProvider.GetRequiredService<AppConfiguration>();
             ILogger<LiteClient> logger = serviceProvider.GetRequiredService<ILogger<LiteClient>>();
 
-            // Create SingleLiteEngine -> RateLimitedLiteEngine -> LiteClient
-            // Public key is expected in hex format (64 chars = 32 bytes)
             byte[] publicKey = Convert.FromHexString(config.LiteClient.PublicKey);
             LiteSingleEngine engine = new(
                 config.LiteClient.Host,

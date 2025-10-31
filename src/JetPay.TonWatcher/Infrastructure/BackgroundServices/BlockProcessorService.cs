@@ -1,7 +1,9 @@
-using JetPay.TonWatcher.Application.Commands.ProcessShardBlock;
+using JetPay.TonWatcher.Application.Commands;
 using JetPay.TonWatcher.Application.Interfaces;
 using JetPay.TonWatcher.Domain.Entities;
+using JetPay.TonWatcher.Infrastructure.Persistence;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 namespace JetPay.TonWatcher.Infrastructure.BackgroundServices;
 
@@ -19,10 +21,12 @@ public class BlockProcessorService(
             {
                 using IServiceScope scope = scopeFactory.CreateScope();
                 IMediator mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
-                IShardBlockRepository shardBlockRepository =
-                    scope.ServiceProvider.GetRequiredService<IShardBlockRepository>();
+                ApplicationDbContext dbContext =
+                    scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-                List<ShardBlock> unprocessedBlocks = await shardBlockRepository.GetUnprocessedAsync(100, stoppingToken);
+                List<ShardBlock> unprocessedBlocks = await dbContext.ShardBlocks.AsNoTracking()
+                    .Where(x => !x.IsProcessed)
+                    .OrderBy(x => x.Seqno).Take(100).ToListAsync(stoppingToken);
 
                 if (unprocessedBlocks.Count == 0)
                 {

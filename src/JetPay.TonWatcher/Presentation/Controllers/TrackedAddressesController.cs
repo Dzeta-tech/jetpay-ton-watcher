@@ -1,7 +1,6 @@
-using JetPay.TonWatcher.Application.Commands.AddTrackedAddress;
-using JetPay.TonWatcher.Application.Commands.DisableTrackedAddress;
+using JetPay.TonWatcher.Application.Commands;
 using JetPay.TonWatcher.Application.Common;
-using JetPay.TonWatcher.Application.Queries.IsAddressTracked;
+using JetPay.TonWatcher.Application.Queries;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Ton.Core.Addresses;

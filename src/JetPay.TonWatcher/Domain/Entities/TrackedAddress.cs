@@ -14,9 +14,7 @@ public class TrackedAddress
     [DatabaseGenerated(DatabaseGeneratedOption.None)]
     public Guid Id { get; private set; }
 
-    public int Workchain { get; private set; }
-
-    [Length(32, 32)] [MaxLength(32)] public byte[] Hash { get; private set; } = null!;
+    [Length(66, 68)] public Address Address { get; private set; } = null!;
 
     public bool IsTrackingActive { get; private set; }
 
@@ -27,8 +25,7 @@ public class TrackedAddress
         return new TrackedAddress
         {
             Id = Guid.NewGuid(),
-            Workchain = address.Workchain,
-            Hash = address.Hash,
+            Address = address,
             IsTrackingActive = true,
             CreatedAt = DateTime.UtcNow
         };

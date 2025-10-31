@@ -54,7 +54,7 @@ public static class WebApplicationExtensions
             .Where(x => x.IsTrackingActive)
             .ToArrayAsync();
 
-        foreach (TrackedAddress trackedAddress in trackedAddresses) await bloomFilter.AddAsync(trackedAddress.Hash);
+        foreach (TrackedAddress trackedAddress in trackedAddresses) await bloomFilter.AddAsync(trackedAddress.Address.Hash);
 
         Log.Information("Initialized bloom filter with {Count} tracked addresses", trackedAddresses.Length);
     }
