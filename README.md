@@ -230,6 +230,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## Related Projects
 
 - [Jetpay](https://jetpay.dev/en) - The main commercial product that uses this service
+- [Ton.NET](https://github.com/Dzeta-tech/Ton.Net) - Modern .NET SDK for TON blockchain
 - [TON](https://ton.org/) - The Open Network blockchain
 
 ## Support
@@ -237,3 +238,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 For issues related to this open-source component, please open an issue on GitHub.
 
 For questions about Jetpay (the commercial product), visit [jetpay.dev](https://jetpay.dev/en).
+
+---
+
+Made with ❤️ for the TON community
