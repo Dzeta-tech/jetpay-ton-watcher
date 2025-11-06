@@ -39,12 +39,9 @@ public static class DependencyInjection
     {
         builder.Services.AddDbContext<ApplicationDbContext>((serviceProvider, options) =>
         {
-            AppConfiguration? config = serviceProvider.GetRequiredService<AppConfiguration>();
+            AppConfiguration config = serviceProvider.GetRequiredService<AppConfiguration>();
             options.UseNpgsql(config.Database.ConnectionString,
-                npgsqlDbContextOptionsBuilder =>
-                {
-                    npgsqlDbContextOptionsBuilder.ConfigureDataSource(x => x.EnableDynamicJson());
-                });
+                npgsql => npgsql.ConfigureDataSource(x => x.EnableDynamicJson()));
         });
     }
 
@@ -62,7 +59,7 @@ public static class DependencyInjection
 
     public static void UseGrpc(this WebApplicationBuilder builder)
     {
-        builder.Services.AddGrpc(options => { options.EnableDetailedErrors = builder.Environment.IsDevelopment(); });
+        builder.Services.AddGrpc(options => options.EnableDetailedErrors = builder.Environment.IsDevelopment());
     }
 
     public static void UseHealthChecks(this WebApplicationBuilder builder)
@@ -76,7 +73,6 @@ public static class DependencyInjection
 
     public static void UseServices(this WebApplicationBuilder builder)
     {
-        // MediatR
         builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly()));
 
         builder.Services.AddSingleton<LiteClient>(serviceProvider =>
@@ -88,10 +84,7 @@ public static class DependencyInjection
             return new LiteClient(rateLimitedEngine);
         });
 
-        // Bloom Filter
-        builder.Services.AddBloomFilter(setupAction => { setupAction.UseInMemory(); });
-
-        // Background Services
+        builder.Services.AddBloomFilter(setupAction => setupAction.UseInMemory());
         builder.Services.AddHostedService<MasterchainSyncService>();
         builder.Services.AddHostedService<BlockProcessorService>();
     }

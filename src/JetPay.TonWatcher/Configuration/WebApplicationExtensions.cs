@@ -18,10 +18,9 @@ public static class WebApplicationExtensions
     public static async Task InitializeServices(this WebApplication app)
     {
         using IServiceScope scope = app.Services.CreateScope();
-
-        // Initialize Bloom Filter with existing tracked addresses
         ApplicationDbContext dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         IBloomFilter bloomFilter = scope.ServiceProvider.GetRequiredService<IBloomFilter>();
+
         TrackedAddress[] trackedAddresses = await dbContext.TrackedAddresses
             .Where(x => x.IsTrackingActive)
             .ToArrayAsync();

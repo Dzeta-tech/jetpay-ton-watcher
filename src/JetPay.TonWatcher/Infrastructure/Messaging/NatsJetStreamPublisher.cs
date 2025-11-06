@@ -15,7 +15,6 @@ public class NatsJetStreamPublisher(INatsConnection natsConnection) : IMessagePu
         string json = JsonSerializer.Serialize(message);
         byte[] data = Encoding.UTF8.GetBytes(json);
         string subject = $"ton.transactions.{typeof(T).Name.ToLowerInvariant()}";
-
         await jetStream.PublishAsync(subject, data, cancellationToken: cancellationToken);
     }
 }

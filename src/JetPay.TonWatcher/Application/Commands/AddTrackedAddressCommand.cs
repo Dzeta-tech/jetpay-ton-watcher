@@ -16,12 +16,11 @@ public class AddTrackedAddressCommandHandler(
     IBloomFilter bloomFilter)
     : IRequestHandler<AddTrackedAddressCommand>
 {
-    public async Task Handle(AddTrackedAddressCommand request,
-        CancellationToken cancellationToken)
+    public async Task Handle(AddTrackedAddressCommand request, CancellationToken cancellationToken)
     {
         TrackedAddress trackedAddress = TrackedAddress.Create(request.Address);
-
         await dbContext.TrackedAddresses.AddAsync(trackedAddress, cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
         await bloomFilter.AddAsync(request.Address.Hash.ToArray());
     }
 }
