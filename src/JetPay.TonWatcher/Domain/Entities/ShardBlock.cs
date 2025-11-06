@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 namespace JetPay.TonWatcher.Domain.Entities;
 
 [Index(nameof(Seqno))]
+[Index(nameof(IsProcessed), nameof(Seqno))]
 public class ShardBlock
 {
     ShardBlock()

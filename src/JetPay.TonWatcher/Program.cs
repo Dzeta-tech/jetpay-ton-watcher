@@ -1,4 +1,5 @@
 using JetPay.TonWatcher.Configuration;
+using JetPay.TonWatcher.Presentation.Services;
 using Serilog;
 
 try
@@ -8,17 +9,18 @@ try
     builder.UseLogging();
     builder.UseConfiguration();
     builder.UseDatabase();
-    builder.UseRedis();
-    builder.UseControllers();
+    builder.UseNats();
+    builder.UseGrpc();
+    builder.UseHealthChecks();
     builder.UseServices();
 
     WebApplication app = builder.Build();
 
     await app.UseDatabaseMigrations();
-
-    app.UseControllers();
-
     await app.InitializeServices();
+
+    app.MapGrpcService<TonWatcherService>();
+    app.MapHealthChecks("/health");
 
     app.Run();
 }

@@ -7,7 +7,7 @@ public class AppConfiguration : BaseConfiguration
 {
     [Required] public DatabaseConnectionConfiguration Database { get; set; } = null!;
     [Required] public LiteClientConfiguration LiteClient { get; set; } = null!;
-    [Required] public RedisConfiguration Redis { get; set; } = null!;
+    [Required] public NatsConfiguration Nats { get; set; } = null!;
 }
 
 public class LiteClientConfiguration : BaseConfiguration
@@ -18,10 +18,10 @@ public class LiteClientConfiguration : BaseConfiguration
     public int Ratelimit { get; set; } = 10;
 }
 
-public class RedisConfiguration : BaseConfiguration
+public class NatsConfiguration : BaseConfiguration
 {
-    [Required] public string Host { get; set; } = string.Empty;
-    [Required] public string Port { get; set; } = string.Empty;
+    [Required] public string Url { get; set; } = "nats://localhost:4222";
     public string? User { get; set; }
     public string? Password { get; set; }
+    public string? Token { get; set; }
 }

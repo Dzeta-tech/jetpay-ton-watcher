@@ -1,5 +1,4 @@
 using JetPay.TonWatcher.Application.Commands;
-using JetPay.TonWatcher.Application.Interfaces;
 using JetPay.TonWatcher.Domain.Entities;
 using JetPay.TonWatcher.Infrastructure.Persistence;
 using MediatR;

@@ -56,7 +56,7 @@ public class SyncShardBlocksCommandHandler(
     {
         uint maxSeqno = await dbContext.ShardBlocks.AsNoTracking().Where(x => x.Shard == shard.Shard)
             .OrderByDescending(x => x.Seqno).Select(x => x.Seqno)
-         .FirstOrDefaultAsync(cancellationToken);
+            .FirstOrDefaultAsync(cancellationToken);
 
         if (maxSeqno == 0)
             maxSeqno = shard.Seqno - 1;

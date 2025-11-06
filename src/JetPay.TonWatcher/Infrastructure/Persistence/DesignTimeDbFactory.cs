@@ -1,8 +1,5 @@
-using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
-using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using Ton.Core.Addresses;
 
 namespace JetPay.TonWatcher.Infrastructure.Persistence;
 

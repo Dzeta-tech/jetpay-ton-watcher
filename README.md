@@ -1,72 +1,156 @@
-# JetPay TON Watcher
+# TON Watcher
 
-A blockchain transaction monitoring service for the TON network. Watches tracked addresses and publishes transaction events to RabbitMQ.
+A high-performance blockchain transaction monitoring service for the TON network. This service continuously watches tracked addresses and publishes transaction events via NATS JetStream.
 
-## How It Works
+> **Note:** This is an open-source component of [Jetpay](https://jetpay.dev/en) — a fast on-chain payment solution for Telegram & TON. While Jetpay itself is a closed-source commercial product, we're open-sourcing this core infrastructure component to benefit the TON ecosystem.
 
-The service continuously monitors the TON blockchain for transactions involving tracked addresses:
+## About Jetpay
 
-1. Syncs new shard blocks from the TON masterchain
-2. Processes blocks to find transactions for tracked addresses
-3. Uses Bloom filter for efficient address matching
-4. Publishes transaction events to RabbitMQ when matches are found
-5. Optionally sends Telegram notifications
+[Jetpay](https://jetpay.dev/en) is a reliable backend for accepting TON/USDT payments with automatic fund aggregation. It provides instant payment processing, gas-free transactions for users, and supports 1000+ tokens. This watcher service is a critical component that powers Jetpay's real-time transaction detection capabilities.
 
-## API Endpoints
+## What This Service Does
 
-### Health Check
+TON Watcher monitors the TON blockchain in real-time and detects transactions for any tracked addresses:
+
+1. **Syncs Masterchain**: Continuously fetches new shard blocks from the TON masterchain
+2. **Processes Blocks**: Analyzes blocks to find transactions involving tracked addresses
+3. **Efficient Matching**: Uses Bloom filter for fast address lookups
+4. **Event Publishing**: Publishes transaction events to NATS JetStream when matches are found
+5. **gRPC API**: Provides a gRPC interface for managing tracked addresses
+
+## Features
+
+- ✅ Real-time transaction monitoring
+- ✅ Efficient Bloom filter-based address matching
+- ✅ NATS JetStream integration for reliable event streaming
+- ✅ gRPC API for address management
+- ✅ PostgreSQL persistence
+- ✅ Health checks for monitoring
+- ✅ Production-ready with proper error handling
+
+## Architecture
+
+The service is built with modern .NET patterns:
+
+- **CQRS**: Clean separation using MediatR
+- **Domain Events**: Decoupled event handling
+- **Background Services**: Continuous block syncing and processing
+- **gRPC**: Type-safe service interface
+- **NATS JetStream**: Reliable message streaming
+
+## Quick Start
+
+### Prerequisites
+
+- .NET 9.0 SDK
+- PostgreSQL database
+- NATS server with JetStream enabled
+- TON LiteClient access
+
+### Configuration
+
+Set the following environment variables:
+
+```bash
+# Database
+DATABASE_HOST=localhost
+DATABASE_PORT=5432
+DATABASE_DATABASE=tonwatcher
+DATABASE_USERNAME=postgres
+DATABASE_PASSWORD=password
+
+# TON LiteClient
+LITE_CLIENT_HOST=your-liteclient-host
+LITE_CLIENT_PORT=your-liteclient-port
+LITE_CLIENT_PUBLIC_KEY=your-public-key-hex
+LITE_CLIENT_RATELIMIT=10
+
+# NATS
+NATS_URL=nats://localhost:4222
+NATS_USER=optional-user
+NATS_PASSWORD=optional-password
+NATS_TOKEN=optional-token
 ```
-GET /api/v1/tracked-addresses/status
+
+### Running
+
+```bash
+dotnet build
+dotnet run --project src/JetPay.TonWatcher/JetPay.TonWatcher.csproj
 ```
 
-**Response:**
-```json
-{
-  "success": true
-}
+### Docker
+
+```bash
+docker build -t ton-watcher .
+docker run -p 50051:50051 --env-file .env ton-watcher
 ```
 
-### Add Tracked Address
-```
-POST /api/v1/tracked-addresses/add/{address}
-```
+## gRPC API
 
-**Parameters:**
-- `address` (path): TON address to track (e.g., `EQD...`)
+The service exposes a gRPC interface defined in `Protos/tonwatcher.proto`.
 
-**Success Response (200):**
-```json
-{
-  "success": true,
-  "data": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
-}
+### Service Methods
+
+#### AddTrackedAddress
+Adds a new address to track. Accepts addresses in any format (raw 0:hex, base64, etc.).
+
+```protobuf
+rpc AddTrackedAddress (AddTrackedAddressRequest) returns (AddTrackedAddressResponse);
 ```
 
-**Error Response (400):**
-```json
-{
-  "success": false,
-  "errorMessage": "Invalid address format: ..."
-}
+#### DisableTrackedAddress
+Disables tracking for an address.
+
+```protobuf
+rpc DisableTrackedAddress (DisableTrackedAddressRequest) returns (DisableTrackedAddressResponse);
 ```
 
-## RabbitMQ Integration
+#### IsAddressTracked
+Checks if an address is currently being tracked.
 
-### Exchange Configuration
-- **Type**: Fanout
-- **Name**: Configurable via `RABBIT_MQ_EXCHANGE_NAME` (default: `ton-transactions`)
-- **Durable**: Yes
+```protobuf
+rpc IsAddressTracked (IsAddressTrackedRequest) returns (IsAddressTrackedResponse);
+```
+
+#### GetStatus
+Returns service health status.
+
+```protobuf
+rpc GetStatus (StatusRequest) returns (StatusResponse);
+```
+
+### Generating Client Code
+
+For client applications, generate gRPC client code from the proto file:
+
+```bash
+# C#
+dotnet add package Grpc.Tools
+# Then the proto will be compiled automatically
+
+# Other languages
+# Use the standard gRPC tools for your language
+```
+
+## NATS JetStream Integration
+
+### Stream Configuration
+
+The service automatically creates a JetStream stream named `TON_TRANSACTIONS` with:
+- **Subjects**: `ton.transactions.*`
+- **Storage**: File-based
+- **Retention**: WorkQueue policy
 
 ### Message Format
 
-When a transaction is detected for a tracked address, the following message is published:
+When a transaction is detected, a message is published to `ton.transactions.transactionfoundevent`:
 
 ```json
 {
   "address": "EQD...",
   "txHash": "base64-encoded-hash",
-  "lt": 12345678901234567,
-  "detectedAt": "2025-10-22T10:30:00.000Z"
+  "lt": 12345678901234567
 }
 ```
 
@@ -74,69 +158,82 @@ When a transaction is detected for a tracked address, the following message is p
 - `address` (string): The TON address that had a transaction
 - `txHash` (string): Base64-encoded transaction hash
 - `lt` (number): Logical time of the transaction
-- `detectedAt` (string): ISO 8601 timestamp when the transaction was detected
 
-### Consumer Example
+### Consuming Events
 
-To consume these messages, create a queue and bind it to the exchange:
+Example consumer in C#:
 
 ```csharp
-// Example in C# with RabbitMQ.Client
-var factory = new ConnectionFactory() { HostName = "localhost" };
-using var connection = await factory.CreateConnectionAsync();
-using var channel = await connection.CreateChannelAsync();
+using NATS.Client.Core;
+using NATS.Net;
 
-await channel.QueueDeclareAsync("my-queue", durable: true, exclusive: false, autoDelete: false);
-await channel.QueueBindAsync("my-queue", "ton-transactions", "");
+var nats = new NatsConnection(NatsOpts.Default with { Url = "nats://localhost:4222" });
+var js = nats.CreateJetStreamContext();
 
-var consumer = new AsyncEventingBasicConsumer(channel);
-consumer.ReceivedAsync += async (model, ea) =>
+await js.SubscribeAsync("ton.transactions.transactionfoundevent", async msg =>
 {
-    var body = ea.Body.ToArray();
-    var message = Encoding.UTF8.GetString(body);
-    var transaction = JsonSerializer.Deserialize<TransactionEvent>(message);
-    
-    // Process transaction
+    var json = System.Text.Encoding.UTF8.GetString(msg.Data.ToArray());
+    var transaction = JsonSerializer.Deserialize<TransactionFoundEvent>(json);
     Console.WriteLine($"Transaction found: {transaction.Address}");
-};
-
-await channel.BasicConsumeAsync("my-queue", autoAck: true, consumer: consumer);
+});
 ```
 
-## Configuration
+## Health Checks
 
-Environment variables:
+The service exposes health check endpoints:
+
+- `GET /health` - Overall health status
+- `GET /health/ready` - Readiness check (includes database connectivity)
+
+## Project Structure
+
+```
+src/JetPay.TonWatcher/
+├── Application/          # Commands, queries, and business logic
+├── Configuration/        # DI, app configuration
+├── Domain/              # Entities, events, value objects
+├── Infrastructure/      # Database, NATS, background services
+├── Presentation/        # gRPC services
+└── Protos/             # gRPC service definitions
+```
+
+## Development
+
+### Building
 
 ```bash
-
-# TON LiteClient (Required)
-LITE_CLIENT_HOST=your-liteclient-host
-LITE_CLIENT_PORT=your-liteclient-port
-LITE_CLIENT_PUBLIC_KEY=your-public-key
-LITE_CLIENT_RATELIMIT=10
-
-# Redis (Required for streaming transactions)
-REDIS__HOST=localhost
-REDIS__PORT=6379
-REDIS__USER=
-REDIS__PASSWORD=
-
-# Telegram (Optional - disable if not needed)
-TELEGRAM_ENABLED=false
-TELEGRAM_BOT_TOKEN=your-bot-token
-TELEGRAM_CHAT_ID=your-chat-id
+dotnet build
 ```
 
-## Architecture
+### Running Tests
 
-Built with:
-- **CQRS Pattern**: Clean separation of commands and queries using MediatR
-- **Domain Events**: Decoupled event handling for transaction notifications
-- **Repository Pattern**: Clean data access abstractions
-- **Background Services**: Continuous block syncing and processing
+```bash
+dotnet test
+```
 
-### Project Structure
-- `Domain/`: Business entities, events, and value objects
-- `Application/`: Commands, queries, and business logic handlers
-- `Infrastructure/`: Database, LiteClient, Redis Streams, event handlers
-- `Presentation/`: API controllers
+### Database Migrations
+
+Migrations are automatically applied on startup. To create a new migration:
+
+```bash
+dotnet ef migrations add MigrationName --project src/JetPay.TonWatcher
+```
+
+## License
+
+This project is open source. Please check the LICENSE file for details.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Related Projects
+
+- [Jetpay](https://jetpay.dev/en) - The main commercial product that uses this service
+- [TON](https://ton.org/) - The Open Network blockchain
+
+## Support
+
+For issues related to this open-source component, please open an issue on GitHub.
+
+For questions about Jetpay (the commercial product), visit [jetpay.dev](https://jetpay.dev/en).

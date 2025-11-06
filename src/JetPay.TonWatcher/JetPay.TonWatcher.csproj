@@ -4,22 +4,35 @@
         <TargetFramework>net9.0</TargetFramework>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
+        <Protobuf_DefaultBaseNamespace>TonWatcher</Protobuf_DefaultBaseNamespace>
     </PropertyGroup>
+
+    <ItemGroup>
+        <Protobuf Include="Protos\tonwatcher.proto" GrpcServices="Server"/>
+    </ItemGroup>
 
     <ItemGroup>
         <PackageReference Include="BloomFilter.NetCore" Version="2.5.3"/>
         <PackageReference Include="Dzeta.Configuration" Version="1.0.1"/>
-        <PackageReference Include="MediatR" Version="13.1.0" />
-        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.10" />
+        <PackageReference Include="MediatR" Version="13.1.0"/>
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.10"/>
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.10">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
         <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4"/>
         <PackageReference Include="Serilog.AspNetCore" Version="9.0.0"/>
-        <PackageReference Include="StackExchange.Redis" Version="2.9.32"/>
-        <PackageReference Include="Ton.Core" Version="0.2.4" />
-        <PackageReference Include="Ton.LiteClient" Version="0.2.4" />
+        <PackageReference Include="NATS.Net" Version="2.6.11"/>
+        <PackageReference Include="Grpc.AspNetCore" Version="2.71.0"/>
+        <PackageReference Include="Grpc.Tools" Version="2.76.0">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="AspNetCore.HealthChecks.Nats" Version="9.0.0"/>
+        <PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="9.0.0"/>
+        <PackageReference Include="AspNetCore.HealthChecks.Npgsql" Version="9.0.0"/>
+        <PackageReference Include="Ton.Core" Version="0.2.5"/>
+        <PackageReference Include="Ton.LiteClient" Version="0.2.5"/>
     </ItemGroup>
 
 </Project>

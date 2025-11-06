@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+option csharp_namespace = "TonWatcher.Grpc";
+
+package tonwatcher;
+
+// TonWatcher service for managing tracked addresses
+service TonWatcher {
+  // Add an address to track
+  rpc AddTrackedAddress (AddTrackedAddressRequest) returns (AddTrackedAddressResponse);
+  
+  // Disable tracking for an address
+  rpc DisableTrackedAddress (DisableTrackedAddressRequest) returns (DisableTrackedAddressResponse);
+  
+  // Check if an address is being tracked
+  rpc IsAddressTracked (IsAddressTrackedRequest) returns (IsAddressTrackedResponse);
+  
+  // Get service status
+  rpc GetStatus (StatusRequest) returns (StatusResponse);
+}
+
+message AddTrackedAddressRequest {
+  string address = 1; // TON address in any format (raw 0:hex, base64, etc.)
+}
+
+message AddTrackedAddressResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+message DisableTrackedAddressRequest {
+  string address = 1; // TON address in any format
+}
+
+message DisableTrackedAddressResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+message IsAddressTrackedRequest {
+  string address = 1; // TON address in any format
+}
+
+message IsAddressTrackedResponse {
+  bool is_tracked = 1;
+}
+
+message StatusRequest {
+}
+
+message StatusResponse {
+  bool success = 1;
+}
+

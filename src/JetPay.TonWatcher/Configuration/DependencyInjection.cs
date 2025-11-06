@@ -1,14 +1,13 @@
 using System.Reflection;
-using System.Text.Json.Serialization;
 using Dzeta.Configuration;
 using JetPay.TonWatcher.Application.Interfaces;
 using JetPay.TonWatcher.Infrastructure.BackgroundServices;
 using JetPay.TonWatcher.Infrastructure.Messaging;
 using JetPay.TonWatcher.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using NATS.Client.Core;
 using Serilog;
 using Serilog.Events;
-using StackExchange.Redis;
 using Ton.LiteClient;
 using Ton.LiteClient.Engines;
 
@@ -19,11 +18,12 @@ public static class DependencyInjection
     public static void UseLogging(this WebApplicationBuilder builder)
     {
         Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Debug()
+            .MinimumLevel.Information()
             .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
             .MinimumLevel.Override("System", LogEventLevel.Warning)
             .Enrich.FromLogContext()
-            .WriteTo.Console()
+            .Enrich.WithProperty("Application", "TonWatcher")
+            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
             .CreateLogger();
 
         builder.Host.UseSerilog();
@@ -48,37 +48,30 @@ public static class DependencyInjection
         });
     }
 
-    public static void UseRedis(this WebApplicationBuilder builder)
+    public static void UseNats(this WebApplicationBuilder builder)
     {
-        builder.Services.AddSingleton<IConnectionMultiplexer>(serviceProvider =>
+        builder.Services.AddSingleton<INatsConnection>(serviceProvider =>
         {
-            AppConfiguration configuration = serviceProvider.GetRequiredService<AppConfiguration>();
-
-            string redisOptions = $"{configuration.Redis.Host}:{configuration.Redis.Port}";
-
-            if (!string.IsNullOrEmpty(configuration.Redis.User))
-                redisOptions += ",user=" + configuration.Redis.User;
-
-            if (!string.IsNullOrEmpty(configuration.Redis.Password))
-                redisOptions += ",password=" + configuration.Redis.Password;
-
-            return ConnectionMultiplexer.Connect(redisOptions);
+            AppConfiguration config = serviceProvider.GetRequiredService<AppConfiguration>();
+            NatsOpts opts = NatsOpts.Default with { Url = config.Nats.Url };
+            return new NatsConnection(opts);
         });
 
-        builder.Services.AddScoped<RedisDatabase>(serviceProvider =>
-        {
-            IConnectionMultiplexer redis = serviceProvider.GetRequiredService<IConnectionMultiplexer>();
-            return redis.GetDatabase();
-        });
+        builder.Services.AddScoped<IMessagePublisher, NatsJetStreamPublisher>();
     }
 
-    public static void UseControllers(this WebApplicationBuilder builder)
+    public static void UseGrpc(this WebApplicationBuilder builder)
     {
-        builder.Services.AddControllers().AddJsonOptions(opts =>
-        {
-            JsonStringEnumConverter enumConverter = new();
-            opts.JsonSerializerOptions.Converters.Add(enumConverter);
-        });
+        builder.Services.AddGrpc(options => { options.EnableDetailedErrors = builder.Environment.IsDevelopment(); });
+    }
+
+    public static void UseHealthChecks(this WebApplicationBuilder builder)
+    {
+        builder.Services.AddHealthChecks()
+            .AddNpgSql(
+                serviceProvider => serviceProvider.GetRequiredService<AppConfiguration>().Database.ConnectionString,
+                name: "database",
+                tags: ["ready"]);
     }
 
     public static void UseServices(this WebApplicationBuilder builder)
@@ -86,32 +79,14 @@ public static class DependencyInjection
         // MediatR
         builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly()));
 
-        // Infrastructure Services
         builder.Services.AddSingleton<LiteClient>(serviceProvider =>
         {
             AppConfiguration config = serviceProvider.GetRequiredService<AppConfiguration>();
-            ILogger<LiteClient> logger = serviceProvider.GetRequiredService<ILogger<LiteClient>>();
-
             byte[] publicKey = Convert.FromHexString(config.LiteClient.PublicKey);
-            LiteSingleEngine engine = new(
-                config.LiteClient.Host,
-                config.LiteClient.Port,
-                publicKey
-            );
-
-            RateLimitedLiteEngine rateLimitedEngine = new(
-                engine,
-                config.LiteClient.Ratelimit
-            );
-
-            LiteClient liteClient = new(rateLimitedEngine);
-
-            logger.LogInformation("LiteClient initialized for {Host}:{Port} with {RPS} RPS",
-                config.LiteClient.Host, config.LiteClient.Port, config.LiteClient.Ratelimit);
-
-            return liteClient;
+            LiteSingleEngine engine = new(config.LiteClient.Host, config.LiteClient.Port, publicKey);
+            RateLimitedLiteEngine rateLimitedEngine = new(engine, config.LiteClient.Ratelimit);
+            return new LiteClient(rateLimitedEngine);
         });
-        builder.Services.AddScoped<IMessagePublisher, RedisStreamPublisher>();
 
         // Bloom Filter
         builder.Services.AddBloomFilter(setupAction => { setupAction.UseInMemory(); });

@@ -87,7 +87,7 @@ public class ProcessShardBlockCommandHandler(
                 {
                     Address = tx.Account,
                     TxHash = Convert.ToBase64String(tx.Hash),
-                    LogicalTime = tx.Lt,
+                    LogicalTime = tx.Lt
                 };
 
                 foundTransactions.Add(txInfo);
@@ -96,7 +96,7 @@ public class ProcessShardBlockCommandHandler(
                 {
                     Address = tx.Account,
                     TxHash = txInfo.TxHash,
-                    Lt = txInfo.LogicalTime,
+                    Lt = txInfo.LogicalTime
                 }, cancellationToken);
             }
 
